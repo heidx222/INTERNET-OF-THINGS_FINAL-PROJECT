@@ -359,60 +359,17 @@ unsigned long    tiempoUS    = 0;
 bool             pinEchoAnterior = LOW;   // [C3b] Estado previo para detectar flanco
 
 void leerDistanciaJSN_NoBloqueante() {
-  bool pinEchoActual = digitalRead(ECHO_PIN);
-  static unsigned long ultrasonicEchoStart = 0;   // Variable local persistente entre llamadas
+  digitalWrite(TRIG_PIN, LOW);   delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
 
-  switch (estadoUS) {
-    case US_IDLE:
-      // Preparar línea TRIG en LOW antes del pulso
-      digitalWrite(TRIG_PIN, LOW);
-      tiempoUS  = micros();
-      estadoUS  = US_TRIGGER_LOW;
-      pinEchoAnterior = pinEchoActual;
-      break;
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
 
-    case US_TRIGGER_LOW:
-      // Esperar 2 µs con TRIG en LOW
-      if (micros() - tiempoUS >= 2) {
-        digitalWrite(TRIG_PIN, HIGH);
-        tiempoUS = micros();
-        estadoUS = US_TRIGGER_HIGH;
-      }
-      break;
-
-    case US_TRIGGER_HIGH:
-      // Pulso TRIG de 10 µs
-      if (micros() - tiempoUS >= 10) {
-        digitalWrite(TRIG_PIN, LOW);
-        tiempoUS = micros();          // Marca de inicio del timeout total
-        estadoUS = US_WAIT_ECHO;
-      }
-      break;
-
-    case US_WAIT_ECHO:
-      if (pinEchoAnterior == LOW && pinEchoActual == HIGH) {
-        ultrasonicEchoStart = micros();   // Solo se guarda en la transición real
-      }
-
-      // Detectar flanco de BAJADA (HIGH→LOW): fin del pulso de eco
-      if (pinEchoAnterior == HIGH && pinEchoActual == LOW && ultrasonicEchoStart > 0) {
-        long duracion = micros() - ultrasonicEchoStart;
-        float d = duracion * 0.034f / 2.0f;
-        distanciaNivel      = (d > 2.0f && d < 400.0f) ? d : -1.0f;
-        ultrasonicEchoStart = 0;
-        estadoUS            = US_IDLE;
-      }
-
-      // Timeout de seguridad: si no llega respuesta en 30 ms
-      if (micros() - tiempoUS > 30000 && estadoUS == US_WAIT_ECHO) {
-        distanciaNivel      = -1.0;
-        ultrasonicEchoStart = 0;
-        estadoUS            = US_IDLE;
-      }
-      break;
+  if (duration == 0) {
+    distanciaNivel = -1.0; 
+  } else {
+    distanciaNivel = duration * 0.034 / 2.0;
   }
-
-  pinEchoAnterior = pinEchoActual;   // [C3b] Actualizar estado previo al final
 }
 
 // ============================================================
