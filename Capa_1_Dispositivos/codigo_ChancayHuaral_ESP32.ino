@@ -197,6 +197,7 @@ void loop() {
 // ============================================================
 void setup_wifi() {
   Serial.print("[WIFI] Conectando a: "); Serial.println(WIFI_SSID);
+  
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   int intentos = 0;
@@ -207,6 +208,9 @@ void setup_wifi() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
+    // === HACK DE ENERGÍA: Reducir potencia Wi-Fi para estabilizar sensores ===
+    WiFi.setTxPower(WIFI_POWER_5dBm); 
+    
     Serial.println("\n[WIFI] Conectado.");
     Serial.print("[WIFI] IP local: "); Serial.println(WiFi.localIP());
     modoFailsafeLocal = false;
