@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db_postgres:
+    image: postgres:13-alpine
+    container_name: bd_credenciales_iot
+    environment:
+      POSTGRES_DB: chancayhuaral_auth
+      POSTGRES_USER: adminChancayHuaral
+      POSTGRES_PASSWORD: adminChancayHuaral123
+    volumes:
+      # Inyecta el script para crear las tablas al iniciar la BD por primera vez
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adminChancayHuaral -d chancayhuaral_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    # Usamos la imagen oficial del creador del plugin
+    image: iegomez/mosquitto-go-auth:latest
+    container_name: broker_chancay_huaral
+    depends_on:
+      - db_postgres
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/etc/mosquitto/mosquitto.conf
+      - ./mosquitto/data:/mosquitto/data
+    networks:
+      - iot_network
+
+networks:
+  iot_network:
+    driver: bridge

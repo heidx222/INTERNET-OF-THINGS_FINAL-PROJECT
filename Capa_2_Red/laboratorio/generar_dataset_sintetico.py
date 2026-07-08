@@ -18,13 +18,19 @@ fechas = [fecha_inicio + timedelta(minutes=i) for i in range(total_registros)]
 # 2. Generación de datos FÍSICOS NORMALES (Alineados con el hardware)
 np.random.seed(42) 
 
-# Conductividad basada en los 360 uS/cm reales
+# Conductividad eléctrica
 conductividad = np.random.normal(loc=360.0, scale=15.0, size=total_registros)
 
-# Humedad relativa (integrada en el ESP32 corregido)
+# Humedad relativa
 humedad = np.random.normal(loc=75.0, scale=3.0, size=total_registros)
 
-# CORRECCIÓN DE ESCALA: Nivel de agua base en centímetros (Igual al JSN-201)
+# pH del agua
+ph = np.random.normal(loc=7.39, scale=0.2, size=total_registros)
+
+# Turbidez en NTU (Se dispara cuando hay huaycos)
+turbidez = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
+
+# Nivel de agua en cm
 nivel_agua_cm = np.random.normal(loc=120.0, scale=3.0, size=total_registros)
 
 # Ciclos Térmicos Senoidales (Día/Noche)
@@ -38,9 +44,10 @@ temp_agua = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.random
 conductividad[3480:3660] += 450.0  # Sube a > 800 uS/cm
 
 # Anomalía 2: Escorrentía / Huayco (Día 5, de 15:00 a 19:00)
-# CORRECCIÓN DE ESCALA: El nivel sube 110 cm (equivalente a 1.1 metros de crecida)
-nivel_agua_cm[6660:6900] += 110.0  
-
+# El nivel sube 110 cm (equivalente a 1.1 metros de crecida)
+nivel_agua_cm[6660:6900] += 110.0 
+# Si hay un huayco, la turbidez se dispara brutalmente a > 500 NTU
+turbidez[6660:6900] += 600.0 
 
 # 4. GEMELO LÓGICO: Determinación determinística de alertas (Cero Redundancia)
 # Replicamos de forma exacta los umbrales e histéresis de verificarAlertas() del ESP32
@@ -70,15 +77,17 @@ for i in range(total_registros):
 
 # 5. CONSTRUCCIÓN DEL DATAFRAME (Espejo exacto del JSON del ESP32)
 df = pd.DataFrame({
-    'node_id': "nodo_chancay_01",              # Equivalente a MQTT_CLIENT_ID
-    'timestamp_ms': np.arange(total_registros) * 60000, # Simula marcas de tiempo relativas crecientes
+    'node_id': "nodo_chancay_01",
+    'timestamp_ms': np.arange(total_registros) * 60000, 
     'conductividad': np.round(conductividad, 1),
+    'ph': np.round(ph, 2),              
+    'turbidez': np.round(turbidez, 1),  
     'temp_agua': np.round(temp_agua, 1),
     'temp_ambiente': np.round(temp_ambiente, 1),
     'humedad': np.round(humedad, 1),
     'nivel_agua_cm': np.round(nivel_agua_cm, 1),
     'alerta': alerta,
-    'tipo_emergencia': tipo_emergencia
+    'estado_mapek': tipo_emergencia 
 })
 
 # Exportación limpia
