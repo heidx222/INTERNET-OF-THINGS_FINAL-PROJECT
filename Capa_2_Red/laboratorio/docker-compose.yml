@@ -22,11 +22,11 @@ services:
       retries: 5
 
   mosquitto:
-    # Usamos la imagen oficial del creador del plugin
     image: iegomez/mosquitto-go-auth:latest
     container_name: broker_chancay_huaral
     depends_on:
-      - db_postgres
+      db_postgres:
+        condition: service_healthy 
     ports:
       - "1883:1883"
     volumes:
@@ -34,6 +34,35 @@ services:
       - ./mosquitto/data:/mosquitto/data
     networks:
       - iot_network
+
+  motor_ia:
+    build:
+      context: ../Capa_3_Soporte_A_Servicios/laboratorio 
+      dockerfile: Dockerfile
+    container_name: motor_ia_chancay
+    depends_on:
+      mosquitto: 
+        condition: service_started
+    networks:
+      - iot_network
+  
+  node_red_app:
+    build:
+      context: ../Capa_4_Aplicacion/laboratorio 
+      dockerfile: Dockerfile.nodered
+    container_name: app_nodered_chancay
+    ports:
+      - "1880:1880"
+    volumes:
+      - ../Capa_4_Aplicacion/laboratorio/data:/data 
+    environment:
+      - TZ=America/Lima
+      - AI_API_KEY=tu_token_aqui
+    networks:
+      - iot_network
+    depends_on:
+      - mosquitto
+      - motor_ia
 
 networks:
   iot_network:
