@@ -23,14 +23,8 @@ def conectar_broker():
     # Creamos el cliente con un identificador único virtual para diferenciarlo del ESP32
     client = mqtt.Client(client_id="Nodo_Virtual_Historico_Chancay")
     
-<<<<<<< HEAD:Capa_2_Red/script_simulator_mqtt.py
-    # MITIGACIÓN STRIDE (Spoofing): Forzamos las credenciales guardadas en configuration_usuarios.txt
-    client.username_pw_set(MQTT_USER, MQTT_PASS)
-=======
-    # [ENFOQUE STRIDE - Mitigación de Spoofing y Tampering]
-    # Usando el usuario inyectado en PostgreSQL
+    # [ENFOQUE STRIDE - Mitigación de Spoofing y Tampering] Usando el usuario inyectado en PostgreSQL
     cliente.username_pw_set("simulador_python", "simulador123")
->>>>>>> ac14955 (Actualización Capa 2 - Proyecto Final IoT):Capa_2_Red/laboratorio/script_simulator_mqtt.py
     
     print(f"[RED] Conectando al Broker MQTT en {MQTT_SERVER}:{MQTT_PORT}...")
     try:
@@ -86,10 +80,6 @@ def transmitir_historico():
     except Exception as e:
         print(f"[ERROR] Fallo en la transmisión streaming: {e}")
 
-<<<<<<< HEAD:Capa_2_Red/script_simulator_mqtt.py
-    client.loop_stop()
-    client.disconnect()
-=======
     cliente = conectar_mqtt()
     if not cliente:
         return
