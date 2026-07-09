@@ -1,8 +1,8 @@
-# =================================================================
+# ================================================================================================
 # PROYECTO: Sistema IoT Autónomo - Cuenca Chancay-Huaral
-# ARCHIVO: generar_dataset_sintetico_PRO.py (Capa 3 - Analítica)
-# ENFOQUE: Gemelo Digital de Datos - Eliminación de Redundancia y Desacoples
-# =================================================================
+# ARCHIVO: generar_dataset_sintetico_PRO.py (Capa 2 - Analítica)
+# ENFOQUE: Gemelo Digital de Datos - Eliminación de Redundancia y Desacoples - Alineado a Pydantic
+# ================================================================================================
 
 import pandas as pd
 import numpy as np
@@ -18,42 +18,42 @@ fechas = [fecha_inicio + timedelta(minutes=i) for i in range(total_registros)]
 # 2. Generación de datos FÍSICOS NORMALES (Alineados con el hardware)
 np.random.seed(42) 
 
-# Conductividad eléctrica
-conductividad = np.random.normal(loc=360.0, scale=15.0, size=total_registros)
+# Conductividad eléctrica (tds_ppm)
+tds_ppm = np.random.normal(loc=360.0, scale=15.0, size=total_registros)
 
 # Humedad relativa
-humedad = np.random.normal(loc=75.0, scale=3.0, size=total_registros)
+# humedad = np.random.normal(loc=75.0, scale=3.0, size=total_registros)
 
 # pH del agua
 ph = np.random.normal(loc=7.39, scale=0.2, size=total_registros)
 
 # Turbidez en NTU (Se dispara cuando hay huaycos)
-turbidez = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
+turbidez_ntu = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
 
-# Nivel de agua en cm
-nivel_agua_cm = np.random.normal(loc=120.0, scale=3.0, size=total_registros)
+# Nivel de agua en METROS (nivel_m)
+nivel_m = np.random.normal(loc=1.20, scale=0.03, size=total_registros)
 
 # Ciclos Térmicos Senoidales (Día/Noche)
 horas_simuladas = np.array([f.hour + f.minute/60.0 for f in fechas])
-temp_ambiente = 21.0 + 5.0 * np.sin((horas_simuladas - 8) * np.pi / 12) + np.random.normal(0, 0.4, total_registros)
-temp_agua = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.random.normal(0, 0.2, total_registros)
+temp_ambiente_c = 21.0 + 5.0 * np.sin((horas_simuladas - 8) * np.pi / 12) + np.random.normal(0, 0.4, total_registros)
+temp_agua_c = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.random.normal(0, 0.2, total_registros)
 
 
 # 3. INYECCIÓN DE ANOMALÍAS CRÍTICAS DE CAMPO
 # Anomalía 1: Vertimiento químico (Día 3, de 10:00 a 13:00)
-conductividad[3480:3660] += 450.0  # Sube a > 800 uS/cm
+tds_ppm[3480:3660] += 450.0  # Sube a > 800 uS/cm
 
 # Anomalía 2: Escorrentía / Huayco (Día 5, de 15:00 a 19:00)
 # El nivel sube 110 cm (equivalente a 1.1 metros de crecida)
-nivel_agua_cm[6660:6900] += 110.0 
+nivel_m[6660:6900] += 1.10 
 # Si hay un huayco, la turbidez se dispara brutalmente a > 500 NTU
-turbidez[6660:6900] += 600.0 
+turbidez_ntu[6660:6900] += 600.0
 
 # 4. GEMELO LÓGICO: Determinación determinística de alertas (Cero Redundancia)
 # Replicamos de forma exacta los umbrales e histéresis de verificarAlertas() del ESP32
 # Supongamos los umbrales de tu firmware (Ajustar si tus constantes son diferentes):
 TDS_UMBRAL_ALTO = 700.0
-NIVEL_UMBRAL_ALTO = 40.0  # Recuerda que en ultrasonido, menor distancia al sensor significa que el río subió.
+NIVEL_UMBRAL_ALTO = 0.40  # Recuerda que en ultrasonido, menor distancia al sensor significa que el río subió.
 # Para la simulación simplificada usaremos condiciones lógicas directas sobre los vectores:
 
 alerta = []
@@ -62,11 +62,11 @@ tipo_emergencia = []
 for i in range(total_registros):
     # Condición de Inundación (Prioridad 2): Nivel supera los 210 cm reales de agua
     # Nota: si tu sensor mide distancia invertida, calcula aquí la lógica exacta de tu constante.
-    if nivel_agua_cm[i] > 210.0: 
+    if nivel_m[i] > 2.10: 
         alerta.append("true")
         tipo_emergencia.append(2)
     # Condición de Contaminación (Prioridad 1): TDS alto
-    elif conductividad[i] > TDS_UMBRAL_ALTO:
+    elif tds_ppm[i] > TDS_UMBRAL_ALTO:
         alerta.append("true")
         tipo_emergencia.append(1)
     # Estado Óptimo (Prioridad 0)
@@ -79,15 +79,15 @@ for i in range(total_registros):
 df = pd.DataFrame({
     'node_id': "nodo_chancay_01",
     'timestamp_ms': np.arange(total_registros) * 60000, 
-    'conductividad': np.round(conductividad, 1),
+    'tds_ppm': np.round(tds_ppm, 1),
     'ph': np.round(ph, 2),              
-    'turbidez': np.round(turbidez, 1),  
-    'temp_agua': np.round(temp_agua, 1),
-    'temp_ambiente': np.round(temp_ambiente, 1),
-    'humedad': np.round(humedad, 1),
-    'nivel_agua_cm': np.round(nivel_agua_cm, 1),
+    'turbidez_ntu': np.round(turbidez_ntu, 1),  
+    'temp_agua_c': np.round(temp_agua_c, 1),
+    'temp_ambiente_c': np.round(temp_ambiente_c, 1),
+    #'humedad': np.round(humedad, 1),
+    'nivel_m': np.round(nivel_m, 2),
     'alerta': alerta,
-    'estado_mapek': tipo_emergencia 
+    'estado_mapek': tipo_emergencia
 })
 
 # Exportación limpia
