@@ -21,16 +21,13 @@ np.random.seed(42)
 # Conductividad eléctrica (tds_ppm)
 tds_ppm = np.random.normal(loc=360.0, scale=15.0, size=total_registros)
 
-# Humedad relativa
-# humedad = np.random.normal(loc=75.0, scale=3.0, size=total_registros)
-
 # pH del agua
 ph = np.random.normal(loc=7.39, scale=0.2, size=total_registros)
 
 # Turbidez en NTU (Se dispara cuando hay huaycos)
 turbidez_ntu = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
 
-# Nivel de agua en METROS (nivel_m)
+# Nivel de agua en METROS (Distancia normal desde el puente al río: 1.20 metros)
 nivel_m = np.random.normal(loc=1.20, scale=0.03, size=total_registros)
 
 # Ciclos Térmicos Senoidales (Día/Noche)
@@ -44,8 +41,8 @@ temp_agua_c = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.rand
 tds_ppm[3480:3660] += 450.0  # Sube a > 800 uS/cm
 
 # Anomalía 2: Escorrentía / Huayco (Día 5, de 15:00 a 19:00)
-# El nivel sube 110 cm (equivalente a 1.1 metros de crecida)
-nivel_m[6660:6900] += 1.10 
+# El nivel del río sube, por lo que la distancia ultrasónica SE REDUCE bruscamente en 0.90m
+nivel_m[6660:6900] += 0.90 
 # Si hay un huayco, la turbidez se dispara brutalmente a > 500 NTU
 turbidez_ntu[6660:6900] += 600.0
 
@@ -60,9 +57,9 @@ alerta = []
 tipo_emergencia = []
 
 for i in range(total_registros):
-    # Condición de Inundación (Prioridad 2): Nivel supera los 210 cm reales de agua
-    # Nota: si tu sensor mide distancia invertida, calcula aquí la lógica exacta de tu constante.
-    if nivel_m[i] > 2.10: 
+    # Condición de Inundación (Prioridad 2):
+    # Lógica ultrasónica corregida: Peligro cuando la distancia es MENOR al umbral
+    if nivel_m[i] < NIVEL_UMBRAL_ALTO_METROS:
         alerta.append("true")
         tipo_emergencia.append(2)
     # Condición de Contaminación (Prioridad 1): TDS alto
@@ -84,7 +81,6 @@ df = pd.DataFrame({
     'turbidez_ntu': np.round(turbidez_ntu, 1),  
     'temp_agua_c': np.round(temp_agua_c, 1),
     'temp_ambiente_c': np.round(temp_ambiente_c, 1),
-    #'humedad': np.round(humedad, 1),
     'nivel_m': np.round(nivel_m, 2),
     'alerta': alerta,
     'estado_mapek': tipo_emergencia
