@@ -20,7 +20,7 @@ INSERT INTO test_user (username, password_hash) VALUES (
 -- Permiso de SOLO ESCRITURA (rw = 2)
 INSERT INTO test_acl (username, topic, rw) VALUES (
     'nodo_chancay_01', 
-    'chancay/cuenca/tiempo_real/nodo_01', 
+    'chancay/cuenca/tiempo_real/nodo_chancay_01', 
     2
 );
 
