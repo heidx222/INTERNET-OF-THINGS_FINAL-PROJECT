@@ -18,11 +18,11 @@ fechas = [fecha_inicio + timedelta(minutes=i) for i in range(total_registros)]
 # 2. Generación de datos FÍSICOS NORMALES (Alineados con el hardware)
 np.random.seed(42) 
 
-# Conductividad eléctrica (tds_ppm)
-tds_ppm = np.random.normal(loc=360.0, scale=15.0, size=total_registros)
+# Conductividad eléctrica (tds_ppm): Línea base de estudio 0.36 dS/m = ~230 ppm
+tds_ppm = np.random.normal(loc=230.0, scale=10.0, size=total_registros)
 
 # pH del agua
-ph = np.random.normal(loc=7.39, scale=0.2, size=total_registros)
+ph = np.random.normal(loc=7.39, scale=0.1, size=total_registros)
 
 # Turbidez en NTU (Se dispara cuando hay huaycos)
 turbidez_ntu = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
@@ -38,7 +38,7 @@ temp_agua_c = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.rand
 
 # 3. INYECCIÓN DE ANOMALÍAS CRÍTICAS DE CAMPO
 # Anomalía 1: Vertimiento químico (Día 3, de 10:00 a 13:00)
-tds_ppm[3480:3660] += 450.0  # Sube a > 800 ppm, cruzando el umbral de 700 uS/cm
+tds_ppm[3480:3660] += 400.0  # Sube el TDS en 400 ppm (Llega a 630 ppm, cruzando el umbral de 500)
 
 # Anomalía 2: Escorrentía / Huayco (Día 5, de 15:00 a 19:00)
 # El nivel del río sube, por lo que la distancia ultrasónica SE REDUCE bruscamente en 0.90m
@@ -49,7 +49,7 @@ turbidez_ntu[6660:6900] += 600.0
 
 # 4. GEMELO LÓGICO: Determinación determinística de alertas (Cero Redundancia)
 # Replicamos de forma exacta los umbrales e histéresis de verificarAlertas() del ESP32
-TDS_UMBRAL_ALTO = 700.0
+TDS_UMBRAL_ALTO = 500.0
 NIVEL_UMBRAL_ALTO = 0.40  # Peligro si el puente está a menos de 40 cm del agua (en metros)
 # Para la simulación simplificada usaremos condiciones lógicas directas sobre los vectores:
 
