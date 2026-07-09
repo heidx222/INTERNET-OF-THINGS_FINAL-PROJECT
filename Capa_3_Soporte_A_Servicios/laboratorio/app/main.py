@@ -11,10 +11,10 @@ from pydantic import ValidationError
 # Configuraciones de red
 MQTT_BROKER = "broker_chancay_huaral"
 MQTT_PORT = 1883
-MQTT_USER = "simulador_python"
-MQTT_PASSWORD = "simulador123"
-MQTT_TOPIC_SUB = "chancay/cuenca/tiempo_real/#"
-MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
+MQTT_USER = "backend_central"
+MQTT_PASSWORD = "backendChancay2026"
+MQTT_TOPIC_SUB = "chancay/cuenca/#"  # <-- El comodín (#) hace que escuche histórico y tiempo real
+MQTT_TOPIC_SUB = "chancay/actuadores/alerta/#" # <-- Raíz para despachar comandos
 
 # Configuración de Base de Datos (Mismos datos de la Capa 2)
 DB_USER = "adminChancayHuaral"
