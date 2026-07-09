@@ -78,8 +78,8 @@ int    tipoEmergencia = 0;
 // Histéresis para evitar oscilaciones en el umbral [C4]
 // Se activa cuando el valor SUPERA (o cae por debajo de) el umbral_alto
 // Se desactiva cuando el valor cruza el umbral_bajo
-#define TDS_UMBRAL_ALTO   700.0   // ppm — activa alerta química
-#define TDS_UMBRAL_BAJO   650.0   // ppm — desactiva alerta (zona muerta de 50 ppm)
+#define TDS_UMBRAL_ALTO   500.0   // ppm — activa alerta química
+#define TDS_UMBRAL_BAJO   450.0   // ppm — desactiva alerta (zona muerta de 50 ppm)
 #define NIVEL_UMBRAL_ALTO  40.0   // cm — inundación detectada (distancia muy corta al sensor)
 #define NIVEL_UMBRAL_BAJO  50.0   // cm — nivel normalizado (el agua retrocede)
 
@@ -301,10 +301,11 @@ void publicarDatosRed() {
   }
 
   // [MODIFICADO PARA IA] Inyectamos Verdad Terreno con Ruido Matemático para que la IA detecte varianza
+  // Inyección de Verdad Terreno (CE 0.36 dS/m = ~230 ppm TDS)
   float p_nivel_m  = (distanciaNivel > 0) ? (distanciaNivel / 100.0) : 1.2; 
   float p_temp_amb = (temperaturaAmbiente != -999.0) ? temperaturaAmbiente : (21.0 + random(-1, 2));
   float p_temp_agua = (temperaturaAgua != -999.0) ? temperaturaAgua : (19.5 + (random(-5, 5)/10.0));
-  float p_tds      = (tdsValue > 0) ? tdsValue : (360.0 + random(-10, 10)); // Ruido entre 350 y 370
+  float p_tds      = (tdsValue > 0) ? tdsValue : (230.0 + random(-10, 10)); // Ruido entre 220 y 240
   float p_ph       = 7.39 + (random(-5, 5) / 100.0); // Oscila levemente entre 7.34 y 7.44
   float p_turb     = 15.0 + random(-2, 3); // Oscila levemente
 
