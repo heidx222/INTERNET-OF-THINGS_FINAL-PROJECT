@@ -11,20 +11,26 @@ CREATE TABLE test_acl (
     rw INT NOT NULL -- 1: Read, 2: Write, 3: Read/Write
 );
 
--- Insertar el nodo físico simulado (Contraseña hasheada con bcrypt)
+-- Insertar el nodo físico simulado - CAPA 1 (Contraseña hasheada con bcrypt)
 -- Contraseña en texto plano: nodoChancay01
 INSERT INTO test_user (username, password_hash) VALUES (
     'nodo_chancay_01', 
     '$2a$12$uoVewhlsaDW/p/ff3bq5f.lQ1dvk2eaU9x616cRjPxLBkuyr60.W.'
 );
--- Permiso de SOLO ESCRITURA (rw = 2)
+-- Permiso de ESCRITURA (rw = 2)
 INSERT INTO test_acl (username, topic, rw) VALUES (
     'nodo_chancay_01', 
     'chancay/cuenca/tiempo_real/nodo_chancay_01', 
     2
 );
+-- Permiso de LECTURA (rw = 1)
+INSERT INTO test_acl (username, topic, rw) VALUES (
+    'nodo_chancay_01', 
+    'chancay/actuadores/alerta/nodo_chancay_01', 
+    1
+);
 
--- Insertar credenciales para el script de Python (Simulador Histórico)
+-- Insertar credenciales para el script de Python - CAPA 2 (Simulador Histórico)
 -- Contraseña en texto plano: simulador123
 INSERT INTO test_user (username, password_hash) VALUES (
     'simulador_python', 
@@ -36,3 +42,12 @@ INSERT INTO test_acl (username, topic, rw) VALUES (
     'chancay/cuenca/historico', 
     2
 );
+
+-- Motor de IA / backend FastAPI - CAPA 3
+-- Contraseña en texto plano: backendChancay2026
+INSERT INTO test_user (username, password_hash) VALUES (
+    'backend_central',
+    '$2b$12$vZb6FfL25HjeDJMhW50H5uuM1URiUWxhPPoupYRXUaFN7kmcs6xXy'
+);
+INSERT INTO test_acl (username, topic, rw) VALUES ('backend_central', 'chancay/cuenca/#', 1);
+INSERT INTO test_acl (username, topic, rw) VALUES ('backend_central', 'chancay/actuadores/alerta/#', 2);
