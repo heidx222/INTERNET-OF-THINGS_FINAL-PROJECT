@@ -38,19 +38,19 @@ temp_agua_c = 16.5 + 1.5 * np.sin((horas_simuladas - 10) * np.pi / 12) + np.rand
 
 # 3. INYECCIÓN DE ANOMALÍAS CRÍTICAS DE CAMPO
 # Anomalía 1: Vertimiento químico (Día 3, de 10:00 a 13:00)
-tds_ppm[3480:3660] += 450.0  # Sube a > 800 uS/cm
+tds_ppm[3480:3660] += 450.0  # Sube a > 800 ppm, cruzando el umbral de 700 uS/cm
 
 # Anomalía 2: Escorrentía / Huayco (Día 5, de 15:00 a 19:00)
 # El nivel del río sube, por lo que la distancia ultrasónica SE REDUCE bruscamente en 0.90m
-nivel_m[6660:6900] += 0.90 
+# Pasa de 1.20m a 0.30m (Cae por debajo del umbral de 0.40m)
+nivel_m[6660:6900] -= 0.90 
 # Si hay un huayco, la turbidez se dispara brutalmente a > 500 NTU
 turbidez_ntu[6660:6900] += 600.0
 
 # 4. GEMELO LÓGICO: Determinación determinística de alertas (Cero Redundancia)
 # Replicamos de forma exacta los umbrales e histéresis de verificarAlertas() del ESP32
-# Supongamos los umbrales de tu firmware (Ajustar si tus constantes son diferentes):
 TDS_UMBRAL_ALTO = 700.0
-NIVEL_UMBRAL_ALTO = 0.40  # Recuerda que en ultrasonido, menor distancia al sensor significa que el río subió.
+NIVEL_UMBRAL_ALTO = 0.40  # Peligro si el puente está a menos de 40 cm del agua (en metros)
 # Para la simulación simplificada usaremos condiciones lógicas directas sobre los vectores:
 
 alerta = []
@@ -58,8 +58,7 @@ tipo_emergencia = []
 
 for i in range(total_registros):
     # Condición de Inundación (Prioridad 2):
-    # Lógica ultrasónica corregida: Peligro cuando la distancia es MENOR al umbral
-    if nivel_m[i] < NIVEL_UMBRAL_ALTO_METROS:
+    if nivel_m[i] < NIVEL_UMBRAL_ALTO:
         alerta.append("true")
         tipo_emergencia.append(2)
     # Condición de Contaminación (Prioridad 1): TDS alto
