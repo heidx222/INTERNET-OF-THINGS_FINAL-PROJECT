@@ -28,7 +28,7 @@ INSERT INTO test_acl (username, topic, rw) VALUES (
 -- Contraseña en texto plano: simulador123
 INSERT INTO test_user (username, password_hash) VALUES (
     'simulador_python', 
-    '$2a$12$KkQ/z8J7A6V2bT4zL6r.y.QxM9E7N2G1xZ5xH1b2H3j4k5L6m7n8o' 
+    '$2b$12$/OszdszYJR5HrQZs7TFMue2kjGvZHM2hPKzFrubPG2pZjGNgCNAq.' 
 );
 -- Permiso de SOLO ESCRITURA (rw = 2) en el tópico histórico
 INSERT INTO test_acl (username, topic, rw) VALUES (
