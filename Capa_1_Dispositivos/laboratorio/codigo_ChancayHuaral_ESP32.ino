@@ -76,12 +76,12 @@ String mensajeAlerta  = "SISTEMA OPTIMO";
 int    tipoEmergencia = 0;
 
 // Histéresis para evitar oscilaciones en el umbral [C4]
-// Se activa cuando el valor SUPERA el umbral_alto
-// Se desactiva cuando el valor BAJA del umbral_bajo
-#define TDS_UMBRAL_ALTO   1050.0   // ppm — activa alerta
-#define TDS_UMBRAL_BAJO    950.0   // ppm — desactiva alerta (zona muerta 100 ppm)
-#define NIVEL_UMBRAL_ALTO   12.0   // cm — inundación detectada
-#define NIVEL_UMBRAL_BAJO   18.0   // cm — nivel normalizado
+// Se activa cuando el valor SUPERA (o cae por debajo de) el umbral_alto
+// Se desactiva cuando el valor cruza el umbral_bajo
+#define TDS_UMBRAL_ALTO   700.0   // ppm — activa alerta química
+#define TDS_UMBRAL_BAJO   650.0   // ppm — desactiva alerta (zona muerta de 50 ppm)
+#define NIVEL_UMBRAL_ALTO  40.0   // cm — inundación detectada (distancia muy corta al sensor)
+#define NIVEL_UMBRAL_BAJO  50.0   // cm — nivel normalizado (el agua retrocede)
 
 // Control de tiempos asíncronos — STRIDE Disponibilidad [DoS interno]
 unsigned long lastLCDUpdate    = 0;
