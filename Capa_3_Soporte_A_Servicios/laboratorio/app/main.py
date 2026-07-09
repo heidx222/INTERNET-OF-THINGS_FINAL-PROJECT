@@ -14,7 +14,7 @@ MQTT_PORT = 1883
 MQTT_USER = "backend_central"
 MQTT_PASSWORD = "backendChancay2026"
 MQTT_TOPIC_SUB = "chancay/cuenca/#"  # <-- El comodín (#) hace que escuche histórico y tiempo real
-MQTT_TOPIC_SUB = "chancay/actuadores/alerta/#" # <-- Raíz para despachar comandos
+MQTT_TOPIC_PUB = "chancay/actuadores/alerta/#" # <-- Raíz para despachar comandos
 
 # Configuración de Base de Datos (Mismos datos de la Capa 2)
 DB_USER = "adminChancayHuaral"
