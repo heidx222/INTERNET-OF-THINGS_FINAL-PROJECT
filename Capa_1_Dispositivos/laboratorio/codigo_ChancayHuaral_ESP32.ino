@@ -104,14 +104,33 @@ int pantallaActual = 0;
 // Modo operativo
 bool modoFailsafeLocal = false;
 
-// ============================================================
-// CALLBACK MQTT: Ejecución de comandos desde Capa 3
-// ============================================================
+// =====================================================================================
+// CALLBACK MQTT: Ejecución de comandos desde Capa 3 y Dashboard (a realizar en CAPA 4)
+// =====================================================================================
 void callbackMQTT(char* topic, byte* payload, unsigned int length) {
-  Serial.println("\n[MAPE-K EXECUTE] ¡Orden recibida desde el Motor de IA!");
-  alertaCritica = true;
-  tipoEmergencia = 2; // Forzamos pitido rápido 
-  mensajeAlerta = "ALERTA IA NUBE!";
+  String mensaje = "";
+  for (unsigned int i = 0; i < length; i++) {
+    mensaje += (char)payload[i];
+  }
+  
+  Serial.print("[MAPE-K EXECUTE] Orden recibida de la red: ");
+  Serial.println(mensaje);
+
+  // 1. La Inteligencia Artificial ordena ACTIVAR (Capa 3)
+  if (mensaje.indexOf("ACTIVAR") >= 0) {
+    alertaCritica = true;
+    tipoEmergencia = 2; // Forzamos pitido rápido (Inundación/Severa)
+    mensajeAlerta = "ALERTA IA NUBE!";
+  }
+  // 2. Un humano presiona el botón en el Dashboard (Capa 4)
+  else if (mensaje.indexOf("CONFIRMAR") >= 0 || mensaje.indexOf("DESPEJAR") >= 0) {
+    if (mensajeAlerta == "ALERTA IA NUBE!") {
+      alertaCritica = false;
+      tipoEmergencia = 0;
+      mensajeAlerta = "SISTEMA OPTIMO";
+      Serial.println("[MAPE-K EXECUTE] Alerta IA despejada remotamente por operador.");
+    }
+  }
 }
 
 // ============================================================
