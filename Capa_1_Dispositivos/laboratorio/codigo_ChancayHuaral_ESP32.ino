@@ -307,7 +307,7 @@ void publicarDatosRed() {
     p_turb
   );
 
-  bool ok = client.publish(MQTT_TOPIC, payload);  // QoS 0, retain=false
+  bool ok = client.publish(MQTT_TOPIC_PUB, payload);  // QoS 0, retain=false
 
   if (ok) {
     Serial.println("[MQTT] Payload transmitido:");
