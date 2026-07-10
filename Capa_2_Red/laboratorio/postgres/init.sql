@@ -52,6 +52,15 @@ INSERT INTO test_user (username, password_hash) VALUES (
 INSERT INTO test_acl (username, topic, rw) VALUES ('backend_central', 'chancay/cuenca/#', 1);
 INSERT INTO test_acl (username, topic, rw) VALUES ('backend_central', 'chancay/actuadores/alerta/#', 2);
 
+-- Dashboard Node-RED - CAPA 4
+-- Contraseña en texto plano: dashboardChancay2026
+INSERT INTO test_user (username, password_hash) VALUES (
+    'dashboard_nodered',
+    '$2b$12$/G59eS7pMnKWu8nz/W1rQuy0sJSsyR.TZTbmUadR87opXres6UBQe'
+);
+INSERT INTO test_acl (username, topic, rw) VALUES ('dashboard_nodered', 'chancay/cuenca/#', 1);
+INSERT INTO test_acl (username, topic, rw) VALUES ('dashboard_nodered', 'chancay/actuadores/alerta/#', 1);
+
 -- Tabla para almacenar el histórico de sensores (Conocimiento - K), usada por Capa 3
 CREATE TABLE IF NOT EXISTS telemetria_cuenca (
     id SERIAL PRIMARY KEY,
