@@ -48,23 +48,23 @@ services:
     networks:
       - iot_network
   
-  node_red_app:
-    build:
-      context: ../../Capa_4_Aplicacion/laboratorio 
-      dockerfile: Dockerfile.nodered
-    container_name: app_nodered_chancay
-    ports:
-      - "1880:1880"
-    volumes:
-      - ../../Capa_4_Aplicacion/laboratorio/data:/data 
-    environment:
-      - TZ=America/Lima
-      - AI_API_KEY=tu_token_aqui
-    networks:
-      - iot_network
-    depends_on:
-      - mosquitto
-      - motor_ia
+  # node_red_app:
+  #   build:
+  #     context: ../../Capa_4_Aplicacion/laboratorio 
+  #     dockerfile: Dockerfile.nodered
+  #   container_name: app_nodered_chancay
+  #   ports:
+  #     - "1880:1880"
+  #   volumes:
+  #     - ../../Capa_4_Aplicacion/laboratorio/data:/data 
+  #   environment:
+  #     - TZ=America/Lima
+  #     - AI_API_KEY=tu_token_aqui
+  #   networks:
+  #     - iot_network
+  #   depends_on:
+  #     - mosquitto
+  #     - motor_ia
 
 networks:
   iot_network:
