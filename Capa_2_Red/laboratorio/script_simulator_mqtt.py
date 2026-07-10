@@ -49,14 +49,14 @@ def transmitir_historico():
             
             contador = 0
             for fila in lector_csv:
-                # [CORREGIDO] Payload JSON idéntico estructuralmente al esquema de la Capa 3 (Pydantic)
+                # [CORREGIDO] Lectura directa de las nuevas columnas del CSV
                 payload = {
-                    "nivel_m": round(float(fila.get("nivel_agua_cm", 0.0)) / 100.0, 2),
-                    "temp_ambiente_c": float(fila.get("temp_ambiente", 0.0)),
-                    "temp_agua_c": float(fila.get("temp_agua", 0.0)),
-                    "tds_ppm": float(fila.get("conductividad", 0.0)),
+                    "nivel_m": float(fila.get("nivel_m", 0.0)),
+                    "temp_ambiente_c": float(fila.get("temp_ambiente_c", 0.0)),
+                    "temp_agua_c": float(fila.get("temp_agua_c", 0.0)),
+                    "tds_ppm": float(fila.get("tds_ppm", 0.0)),
                     "ph": float(fila.get("ph", 0.0)),
-                    "turbidez_ntu": float(fila.get("turbidez", 0.0))
+                    "turbidez_ntu": float(fila.get("turbidez_ntu", 0.0))
                 }
                 
                 # Serialización estricta (Mitigación de Tampering / Alteración)
