@@ -1,0 +1,14 @@
+FROM nodered/node-red:latest-minimal
+
+USER root
+
+# Instalar dependencias del sistema si fueran necesarias
+RUN apk add --no-cache bash
+
+USER node-red
+
+# Instalar únicamente nodos de comunicación y procesamiento
+RUN npm install node-red-node-rbe
+
+# Exponer el puerto por defecto de Node-RED (para la API y edición)
+EXPOSE 1880
