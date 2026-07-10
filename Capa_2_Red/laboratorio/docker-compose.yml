@@ -31,7 +31,7 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto/config/mosquitto.conf:/etc/mosquitto/mosquitto.conf
-      - ./mosquitto/data:/mosquitto/data
+      - mosquitto_data:/mosquitto/data
     networks:
       - iot_network
 
@@ -69,3 +69,6 @@ services:
 networks:
   iot_network:
     driver: bridge
+
+volumes:
+  mosquitto_data: 
