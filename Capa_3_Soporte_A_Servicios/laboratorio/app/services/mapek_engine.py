@@ -1,5 +1,6 @@
 import joblib
 import numpy as np
+import pandas as pd
 import os
 from app.schemas import SensorData
 
@@ -29,15 +30,16 @@ class MapekEngine:
         if self.model is None:
             return False # Failsafe si el modelo no está disponible
         
-        # Vectorizamos en el orden exacto en que fue entrenado el modelo
-        features = np.array([[
-            data.nivel_m, 
-            data.temp_ambiente_c,
-            data.temp_agua_c, 
-            data.tds_ppm, 
-            data.ph, 
-            data.turbidez_ntu
-        ]])
+        # [CORREGIDO] Construimos un DataFrame con los nombres exactos de las columnas
+        datos_para_ia = {
+            "nivel_m": [data.nivel_m],
+            "temp_ambiente_c": [data.temp_ambiente_c],
+            "temp_agua_c": [data.temp_agua_c],
+            "tds_ppm": [data.tds_ppm],
+            "ph": [data.ph],
+            "turbidez_ntu": [data.turbidez_ntu]
+        }
+        features_df = pd.DataFrame(datos_para_ia)
         
         # Isolation Forest retorna -1 para anomalías, 1 para normales
         prediccion = self.model.predict(features)
