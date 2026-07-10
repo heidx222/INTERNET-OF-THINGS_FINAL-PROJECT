@@ -48,23 +48,26 @@ services:
     networks:
       - iot_network
   
-  # node_red_app:
-  #   build:
-  #     context: ../../Capa_4_Aplicacion/laboratorio 
-  #     dockerfile: Dockerfile.nodered
-  #   container_name: app_nodered_chancay
-  #   ports:
-  #     - "1880:1880"
-  #   volumes:
-  #     - ../../Capa_4_Aplicacion/laboratorio/data:/data 
-  #   environment:
-  #     - TZ=America/Lima
-  #     - AI_API_KEY=tu_token_aqui
-  #   networks:
-  #     - iot_network
-  #   depends_on:
-  #     - mosquitto
-  #     - motor_ia
+  node_red_app:
+    build:
+      context: ../../Capa_4_Aplicacion/laboratorio 
+      dockerfile: Dockerfile.nodered
+    container_name: app_nodered_chancay
+    ports:
+      - "1880:1880"
+    volumes:
+      - ../../Capa_4_Aplicacion/laboratorio/nodered-data:/data
+    environment:
+      - TZ=America/Lima
+      - AI_API_KEY=AQ.Ab8RN6Knm7IFz7SzdIZMRJJGmXKJNvmKIEd0kG1RHdloYXv0GQ
+      - WA_INSTANCE=123456                      # <--- Tu Id de Instancia de Green-API
+      - WA_TOKEN=abcdef1234567890yourtoken2026   # <--- Tu Token Secreto de Green-API
+      - WA_RECIPIENT=519998887777@c.us            # <--- Número que recibirá las alertas
+    networks:
+      - iot_network
+    depends_on:
+      - mosquitto
+      - motor_ia
 
 networks:
   iot_network:
