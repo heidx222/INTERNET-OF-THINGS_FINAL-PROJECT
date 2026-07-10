@@ -14,7 +14,8 @@ MQTT_PORT = 1883
 MQTT_USER = "backend_central"
 MQTT_PASSWORD = "backendChancay2026"
 MQTT_TOPIC_SUB = "chancay/cuenca/#"  # <-- El comodín (#) hace que escuche histórico y tiempo real
-MQTT_TOPIC_PUB = "chancay/actuadores/alerta/#" # <-- Raíz para despachar comandos
+# [CORREGIDO] Quitado el comodín '#' porque es ilegal para publicar
+MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
 # Configuración de Base de Datos (Mismos datos de la Capa 2)
 DB_USER = "adminChancayHuaral"
@@ -65,9 +66,16 @@ async def mqtt_listener():
                         nodo_id = topic.split("/")[-1]
                         
                         # 2. ANALYZE
-                        is_anomaly = engine.analyze(sensor_data)
+                        analisis_raw = engine.analyze(sensor_data)
                         
-                        # [PERSISTENCIA] -> Almacenar en la base de datos (Knowledge)
+                        # [CORREGIDO] Casteo de seguridad: Evita que numpy destruya asyncpg
+                        # Si Isolation Forest devuelve -1 (Anomalía), es True. Si no, normaliza a bool.
+                        if str(analisis_raw) == "-1":
+                            is_anomaly = True
+                        else:
+                            is_anomaly = bool(analisis_raw)
+                        
+                        # [PERSISTENCIA]
                         await guardar_en_bd(nodo_id, sensor_data, is_anomaly)
                         
                         # 3. PLAN
@@ -89,6 +97,9 @@ async def mqtt_listener():
                         print(f"[SECURITY] Tampering rechazado: {e}")
                     except json.JSONDecodeError:
                         print("[SECURITY] Payload MQTT no es un JSON válido.")
+                    except Exception as e:
+                        # [CORREGIDO] ¡Aquí estaba la muerte silenciosa! Ahora gritará el error.
+                        print(f"[CRITICAL ERROR] Fallo interno procesando mensaje: {e}")
                         
         except aiomqtt.MqttError as error:
             print(f"[NETWORK-WARN] Conexión MQTT perdida. Reintentando en 5s...")
