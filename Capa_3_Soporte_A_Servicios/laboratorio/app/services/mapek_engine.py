@@ -42,5 +42,5 @@ class MapekEngine:
         features_df = pd.DataFrame(datos_para_ia)
         
         # Isolation Forest retorna -1 para anomalías, 1 para normales
-        prediccion = self.model.predict(features)
+        prediccion = self.model.predict(features_df)
         return prediccion[0] == -1
