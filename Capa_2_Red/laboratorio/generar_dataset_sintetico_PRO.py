@@ -26,6 +26,7 @@ ph = np.random.normal(loc=7.39, scale=0.1, size=total_registros)
 
 # Turbidez en NTU (Se dispara cuando hay huaycos)
 turbidez_ntu = np.random.normal(loc=15.0, scale=5.0, size=total_registros)
+turbidez_ntu = np.maximum(turbidez_ntu, 0.0) # <--- NUEVO: Fuerza a que los negativos se vuelvan 0.0
 
 # Nivel de agua en METROS (Distancia normal desde el puente al río: 1.20 metros)
 nivel_m = np.random.normal(loc=1.20, scale=0.03, size=total_registros)
