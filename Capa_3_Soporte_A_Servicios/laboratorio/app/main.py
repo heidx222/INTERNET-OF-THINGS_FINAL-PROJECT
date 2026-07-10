@@ -4,6 +4,11 @@ import asyncio
 import json
 import aiomqtt
 import asyncpg 
+import warnings # <-- NUEVO: Importar la librería de advertencias
+
+# <-- NUEVO: Silenciar específicamente la queja de sklearn sobre los nombres de las columnas
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
+
 from app.schemas import SensorData, AlertaOut
 from app.services.mapek_engine import MapekEngine
 from pydantic import ValidationError
