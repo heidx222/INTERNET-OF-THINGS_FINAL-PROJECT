@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "01 - Ingesta MQTT y Diagnóstico IA",
         "disabled": false,
-        "info": "## Ingesta MQTT y Diagnóstico IA\n\nSe suscribe al Broker MQTT (`broker_chancay_huaral:1883`) para recibir la telemetría en tiempo real de los nodos de la cuenca (tópico `chancay/cuenca/tiempo_real/#`).\n\nCada lectura se normaliza, se envía al microservicio de IA `motor_ia_chancay` (Isolation Forest, endpoint `POST /diagnostico`) para obtener un veredicto de anomalía independiente, se fusiona con un índice de Salud Hídrica calculado localmente, se cachea en el contexto global y se retransmite en vivo al Frontend vía WebSocket (`/ws/telemetria`).\n\nTambién escucha directamente el tópico `chancay/actuadores/alerta/#` en el cual el propio lazo MAPE-K de la Capa 3 publica sus veredictos críticos, para no perder ninguna alerta aunque el Frontend no esté conectado en ese instante."
+        "info": "## Ingesta MQTT y Diagnóstico IA\n\nSe suscribe al Broker MQTT (`mosquitto-broker.railway.internal:1883`) para recibir la telemetría en tiempo real de los nodos de la cuenca (tópico `chancay/cuenca/tiempo_real/#`).\n\nCada lectura se normaliza, se envía al microservicio de IA `motor_ia_chancay` (Isolation Forest, endpoint `POST /diagnostico`) para obtener un veredicto de anomalía independiente, se fusiona con un índice de Salud Hídrica calculado localmente, se cachea en el contexto global y se retransmite en vivo al Frontend vía WebSocket (`/ws/telemetria`).\n\nTambién escucha directamente el tópico `chancay/actuadores/alerta/#` en el cual el propio lazo MAPE-K de la Capa 3 publica sus veredictos críticos, para no perder ninguna alerta aunque el Frontend no esté conectado en ese instante."
     },
     {
         "id": "57092b1795a11953",
@@ -30,8 +30,8 @@
     {
         "id": "b3dfd4a8381733ae",
         "type": "mqtt-broker",
-        "name": "Broker Chancay-Huaral (broker_chancay_huaral:1883)",
-        "broker": "broker_chancay_huaral",
+        "name": "Broker Chancay-Huaral (mosquitto-broker.railway.internal:1883)",
+        "broker": "mosquitto-broker.railway.internal",
         "port": "1883",
         "clientid": "nodered_yaku_qhawaq",
         "autoConnect": true,
@@ -107,7 +107,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://motor_ia_chancay:8000/diagnostico",
+        "url": "http://internet-of-thingsfinal-project.railway.internal:8000/diagnostico",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -999,7 +999,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://motor_ia_chancay:8000/telecontrol/historial",
+        "url": "http://internet-of-thingsfinal-project.railway.internal:8000/telecontrol/historial",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -1179,7 +1179,7 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Set MOTOR_IA_BASE_URL en flow context",
-        "func": "flow.set('MOTOR_IA_BASE_URL', 'http://motor_ia_chancay:8000');\nreturn null;\n",
+        "func": "flow.set('MOTOR_IA_BASE_URL', 'http://internet-of-thingsfinal-project.railway.internal:8000');\nreturn null;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
