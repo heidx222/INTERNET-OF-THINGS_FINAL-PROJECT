@@ -50,7 +50,7 @@ const crypto = require("crypto");
 const CREDENTIAL_SECRET =
   process.env.NODE_RED_CREDENTIAL_SECRET || "ChancayHuaralYakuQhawaq2026";
 
-const MQTT_BROKER_HOST = "broker_chancay_huaral";
+const MQTT_BROKER_HOST = process.env.MQTT_BROKER_HOST || "broker_chancay_huaral";
 const MQTT_BROKER_PORT = "1883";
 const MQTT_DASHBOARD_USER = "dashboard_nodered";
 const MQTT_DASHBOARD_PASS = "dashboardChancay2026";
