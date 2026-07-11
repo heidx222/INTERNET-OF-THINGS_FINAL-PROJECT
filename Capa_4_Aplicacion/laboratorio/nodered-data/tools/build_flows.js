@@ -1494,13 +1494,101 @@ add({
   wires: [],
 });
 
+// --- Persistencia redundante hacia motor_ia_chancay (Capa 3 -> PostgreSQL) ---
+// Rama en PARALELO (fire-and-forget) a la respuesta HTTP: NO bloquea el ACK
+// al Frontend. Si el microservicio de IA estuviera caído, el comando ya se
+// ejecutó (MQTT) y ya quedó auditado en el Contexto Global de Node-RED; esta
+// rama únicamente añade una segunda capa de trazabilidad forense en la BD
+// relacional (tabla `telecontrol_historial`, ver Capa_2/postgres/init.sql).
+const fnPrepPersistTc = nid("fn-prep-persist-tc");
+add({
+  id: fnPrepPersistTc,
+  type: "function",
+  z: tabTelecontrol,
+  name: "Preparar Persistencia en motor_ia_chancay",
+  info:
+    "Traduce `msg.comando` (generado por 'Validar Comando de Telecontrol') " +
+    "al contrato `TelecontrolComandoIn` esperado por " +
+    "`POST /telecontrol/historial` del microservicio `motor_ia_chancay`.",
+  func:
+    "msg.payload = {\n" +
+    "    comando_id: msg.comando.id,\n" +
+    "    nodo_id: msg.comando.nodo_id,\n" +
+    "    actuador: msg.comando.actuador,\n" +
+    "    accion: msg.comando.accion,\n" +
+    "    operador: msg.comando.operador,\n" +
+    "    origen: msg.comando.origen,\n" +
+    "    ts_comando: msg.comando.ts\n" +
+    "};\n" +
+    "return msg;\n",
+  outputs: 1,
+  timeout: 0,
+  noerr: 0,
+  initialize: "",
+  finalize: "",
+  libs: [],
+  x: 1020,
+  y: 300,
+  wires: [[]],
+});
+const httpReqPersistTc = nid("http-req-persist-tc");
+add({
+  id: httpReqPersistTc,
+  type: "http request",
+  z: tabTelecontrol,
+  name: "POST → motor_ia_chancay /telecontrol/historial",
+  method: "POST",
+  ret: "obj",
+  paytoqs: "ignore",
+  url: `${MOTOR_IA_BASE_URL}/telecontrol/historial`,
+  tls: "",
+  persist: false,
+  proxy: "",
+  insecureHTTPParser: false,
+  authType: "",
+  senderr: false,
+  headers: [{ keyType: "Content-Type", keyValue: "", valueType: "other", valueValue: "application/json" }],
+  x: 1300,
+  y: 300,
+  wires: [[]],
+});
+const fnLogPersistTc = nid("fn-log-persist-tc");
+add({
+  id: fnLogPersistTc,
+  type: "function",
+  z: tabTelecontrol,
+  name: "Log Resultado Persistencia (no crítico)",
+  info:
+    "Registra en consola si la persistencia redundante en PostgreSQL " +
+    "tuvo éxito. Un fallo aquí NUNCA debe afectar al operador: el " +
+    "comando MQTT y la bitácora en memoria ya se ejecutaron con éxito.",
+  func:
+    "if (msg.statusCode >= 200 && msg.statusCode < 300) {\n" +
+    "    node.log(`Comando ${msg.payload && msg.payload.comando_id} persistido en motor_ia_chancay.`);\n" +
+    "} else {\n" +
+    "    node.warn('No se pudo persistir el comando de telecontrol en motor_ia_chancay (no crítico).');\n" +
+    "}\n" +
+    "return null;\n",
+  outputs: 0,
+  timeout: 0,
+  noerr: 0,
+  initialize: "",
+  finalize: "",
+  libs: [],
+  x: 1560,
+  y: 300,
+  wires: [],
+});
+
 nodes.find((n) => n.id === httpInComando).wires = [[fnValidarComando]];
 nodes.find((n) => n.id === fnValidarComando).wires = [[switchComandoValido]];
 nodes.find((n) => n.id === switchComandoValido).wires = [
   [mqttOutComando, fnRegistrarBitacora],
   [httpRespComandoError],
 ];
-nodes.find((n) => n.id === fnRegistrarBitacora).wires = [[httpRespComandoOk]];
+nodes.find((n) => n.id === fnRegistrarBitacora).wires = [[httpRespComandoOk, fnPrepPersistTc]];
+nodes.find((n) => n.id === fnPrepPersistTc).wires = [[httpReqPersistTc]];
+nodes.find((n) => n.id === httpReqPersistTc).wires = [[fnLogPersistTc]];
 
 // --- GET /api/telecontrol/historial (auditoría) ---
 const httpInHistorialTc = nid("http-in-historial-tc");
@@ -1554,7 +1642,13 @@ add({
 nodes.find((n) => n.id === httpInHistorialTc).wires = [[fnLeerHistorialTc]];
 nodes.find((n) => n.id === fnLeerHistorialTc).wires = [[httpRespHistorialTc]];
 
-addCatchNode(tabTelecontrol, 700, 420, [fnValidarComando, fnRegistrarBitacora, fnLeerHistorialTc]);
+addCatchNode(tabTelecontrol, 700, 420, [
+  fnValidarComando,
+  fnRegistrarBitacora,
+  fnLeerHistorialTc,
+  fnPrepPersistTc,
+  httpReqPersistTc,
+]);
 
 const commentTelecontrol = nid("comment-telecontrol");
 add({

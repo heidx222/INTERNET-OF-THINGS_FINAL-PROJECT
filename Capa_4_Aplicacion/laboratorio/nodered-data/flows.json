@@ -943,7 +943,8 @@
         "y": 140,
         "wires": [
             [
-                "1682dbffcbf076d0"
+                "1682dbffcbf076d0",
+                "e61bbce5217e878f"
             ]
         ]
     },
@@ -970,7 +971,76 @@
         "wires": []
     },
     {
-        "id": "41b2d7411ef2bd21",
+        "id": "e61bbce5217e878f",
+        "type": "function",
+        "z": "76385a4aee35babb",
+        "name": "Preparar Persistencia en motor_ia_chancay",
+        "info": "Traduce `msg.comando` (generado por 'Validar Comando de Telecontrol') al contrato `TelecontrolComandoIn` esperado por `POST /telecontrol/historial` del microservicio `motor_ia_chancay`.",
+        "func": "msg.payload = {\n    comando_id: msg.comando.id,\n    nodo_id: msg.comando.nodo_id,\n    actuador: msg.comando.actuador,\n    accion: msg.comando.accion,\n    operador: msg.comando.operador,\n    origen: msg.comando.origen,\n    ts_comando: msg.comando.ts\n};\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1020,
+        "y": 300,
+        "wires": [
+            [
+                "fb590be7632b8907"
+            ]
+        ]
+    },
+    {
+        "id": "fb590be7632b8907",
+        "type": "http request",
+        "z": "76385a4aee35babb",
+        "name": "POST → motor_ia_chancay /telecontrol/historial",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://motor_ia_chancay:8000/telecontrol/historial",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "Content-Type",
+                "keyValue": "",
+                "valueType": "other",
+                "valueValue": "application/json"
+            }
+        ],
+        "x": 1300,
+        "y": 300,
+        "wires": [
+            [
+                "928bd4221daa9b87"
+            ]
+        ]
+    },
+    {
+        "id": "928bd4221daa9b87",
+        "type": "function",
+        "z": "76385a4aee35babb",
+        "name": "Log Resultado Persistencia (no crítico)",
+        "info": "Registra en consola si la persistencia redundante en PostgreSQL tuvo éxito. Un fallo aquí NUNCA debe afectar al operador: el comando MQTT y la bitácora en memoria ya se ejecutaron con éxito.",
+        "func": "if (msg.statusCode >= 200 && msg.statusCode < 300) {\n    node.log(`Comando ${msg.payload && msg.payload.comando_id} persistido en motor_ia_chancay.`);\n} else {\n    node.warn('No se pudo persistir el comando de telecontrol en motor_ia_chancay (no crítico).');\n}\nreturn null;\n",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1560,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "9a80bb303bd2cdc7",
         "type": "http in",
         "z": "76385a4aee35babb",
         "name": "GET /api/telecontrol/historial",
@@ -982,12 +1052,12 @@
         "y": 320,
         "wires": [
             [
-                "0899cf88af7ffcca"
+                "21068cab78dc05f4"
             ]
         ]
     },
     {
-        "id": "0899cf88af7ffcca",
+        "id": "21068cab78dc05f4",
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Leer Bitácora de Telecontrol",
@@ -1002,12 +1072,12 @@
         "y": 320,
         "wires": [
             [
-                "6352e371b6afc1cf"
+                "5eba30f3ef97acee"
             ]
         ]
     },
     {
-        "id": "6352e371b6afc1cf",
+        "id": "5eba30f3ef97acee",
         "type": "http response",
         "z": "76385a4aee35babb",
         "name": "HTTP 200",
@@ -1018,26 +1088,28 @@
         "wires": []
     },
     {
-        "id": "37d6efa501f25276",
+        "id": "9304000a33be5e53",
         "type": "catch",
         "z": "76385a4aee35babb",
         "name": "Captura de Errores API",
         "scope": [
             "5763ffae4ef80322",
             "40c69f474f31adb5",
-            "0899cf88af7ffcca"
+            "21068cab78dc05f4",
+            "e61bbce5217e878f",
+            "fb590be7632b8907"
         ],
         "uncaught": false,
         "x": 700,
         "y": 420,
         "wires": [
             [
-                "f2a44cbec14ea58d"
+                "78f0092dd1fd37aa"
             ]
         ]
     },
     {
-        "id": "f2a44cbec14ea58d",
+        "id": "78f0092dd1fd37aa",
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Formatear Error 500",
@@ -1052,12 +1124,12 @@
         "y": 420,
         "wires": [
             [
-                "2f3e1f92e17d56c0"
+                "ec9cacf2e833b532"
             ]
         ]
     },
     {
-        "id": "2f3e1f92e17d56c0",
+        "id": "ec9cacf2e833b532",
         "type": "http response",
         "z": "76385a4aee35babb",
         "name": "HTTP 500",
@@ -1068,7 +1140,7 @@
         "wires": []
     },
     {
-        "id": "2cbff6d3324f1e18",
+        "id": "5a55e19730266d73",
         "type": "comment",
         "z": "76385a4aee35babb",
         "name": "Anulación manual del operador → comando MQTT inverso hacia actuadores simulados",
@@ -1078,7 +1150,7 @@
         "wires": []
     },
     {
-        "id": "cfbe40a8248d18c8",
+        "id": "48d13d8c0f62b918",
         "type": "inject",
         "z": "f542c6aa8b91ca35",
         "name": "Inicializar Configuración (al desplegar)",
@@ -1098,12 +1170,12 @@
         "y": 700,
         "wires": [
             [
-                "738520da3ecf2744"
+                "3cc35c73239b2822"
             ]
         ]
     },
     {
-        "id": "738520da3ecf2744",
+        "id": "3cc35c73239b2822",
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Set MOTOR_IA_BASE_URL en flow context",

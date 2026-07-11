@@ -69,6 +69,18 @@ services:
       - mosquitto
       - motor_ia
 
+  frontend:
+    build:
+      context: ../../Capa_4_Aplicacion/laboratorio/frontend
+      dockerfile: Dockerfile
+    container_name: yaku_qhawaq_frontend
+    ports:
+      - "8080:80"
+    networks:
+      - iot_network
+    depends_on:
+      - node_red_app
+
 networks:
   iot_network:
     driver: bridge
