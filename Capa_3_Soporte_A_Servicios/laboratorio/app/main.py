@@ -9,7 +9,7 @@ import warnings # <-- NUEVO: Importar la librería de advertencias
 # <-- NUEVO: Silenciar específicamente la queja de sklearn sobre los nombres de las columnas
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
-from app.schemas import SensorData, AlertaOut, DiagnosticoOut
+from app.schemas import SensorData, AlertaOut, DiagnosticoOut, TelecontrolComandoIn, TelecontrolComandoOut
 from app.services.mapek_engine import MapekEngine
 from pydantic import ValidationError
 from datetime import datetime
@@ -205,6 +205,83 @@ async def obtener_telemetria_historico(
     async with pool.acquire() as connection:
         rows = await connection.fetch(query, *valores)
         return [dict(row) for row in rows]
+
+@app.post("/telecontrol/historial", response_model=TelecontrolComandoOut, status_code=201)
+async def registrar_comando_telecontrol(comando: TelecontrolComandoIn):
+    """
+    [CAPA 4 -> CAPA 3] Persistencia redundante de auditoría de Telecontrol.
+
+    Node-RED (Tab 04) invoca este endpoint inmediatamente después de
+    validar un comando de Anulación Manual y publicarlo vía MQTT hacia
+    `chancay/actuadores/comando/<nodo_id>`. El registro se almacena en
+    la tabla relacional `telecontrol_historial` (PostgreSQL, ver
+    Capa_2/postgres/init.sql), garantizando trazabilidad forense de
+    largo plazo independiente del Contexto Global volátil de Node-RED.
+
+    Es idempotente respecto a `comando_id` (columna UNIQUE): reintentos
+    de red desde Node-RED no duplican el registro de auditoría.
+    """
+    pool = app_state.get("db_pool")
+    if not pool:
+        return TelecontrolComandoOut(
+            id=-1, timestamp_registro=datetime.utcnow(), **comando.model_dump()
+        )
+
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO telecontrol_historial
+                (comando_id, nodo_id, actuador, accion, operador, origen, ts_comando)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (comando_id) DO UPDATE SET comando_id = EXCLUDED.comando_id
+            RETURNING id, comando_id, nodo_id, actuador, accion, operador, origen,
+                      ts_comando, timestamp_registro;
+            """,
+            comando.comando_id, comando.nodo_id, comando.actuador, comando.accion,
+            comando.operador, comando.origen, comando.ts_comando,
+        )
+        return TelecontrolComandoOut(**dict(row))
+
+
+@app.get("/telecontrol/historial", response_model=list[TelecontrolComandoOut])
+async def obtener_historial_telecontrol(nodo_id: Optional[str] = None, limit: int = 100):
+    """
+    [CAPA 4] Endpoint de auditoría de largo plazo. Complementa a
+    `GET /api/telecontrol/historial` de Node-RED (que sirve la vista
+    rápida desde el Contexto Global) permitiendo reconstruir la
+    bitácora completa de comandos incluso tras un reinicio total del
+    stack de Node-RED, directamente desde PostgreSQL.
+    """
+    pool = app_state.get("db_pool")
+    if not pool:
+        return []
+
+    async with pool.acquire() as connection:
+        if nodo_id:
+            rows = await connection.fetch(
+                """
+                SELECT id, comando_id, nodo_id, actuador, accion, operador, origen,
+                       ts_comando, timestamp_registro
+                FROM telecontrol_historial
+                WHERE nodo_id = $1
+                ORDER BY timestamp_registro DESC
+                LIMIT $2;
+                """,
+                nodo_id, limit,
+            )
+        else:
+            rows = await connection.fetch(
+                """
+                SELECT id, comando_id, nodo_id, actuador, accion, operador, origen,
+                       ts_comando, timestamp_registro
+                FROM telecontrol_historial
+                ORDER BY timestamp_registro DESC
+                LIMIT $1;
+                """,
+                limit,
+            )
+        return [TelecontrolComandoOut(**dict(row)) for row in rows]
+
 
 @app.post("/diagnostico", response_model=DiagnosticoOut)
 async def diagnosticar_lectura(data: SensorData):

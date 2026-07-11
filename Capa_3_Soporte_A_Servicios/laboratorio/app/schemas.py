@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 class SensorData(BaseModel):
     nivel_m: float = Field(..., ge=0, le=20.0, description="Nivel del río en metros")
@@ -22,3 +23,29 @@ class DiagnosticoOut(BaseModel):
     """
     es_anomalia: bool = Field(..., description="True si Isolation Forest detecta un patrón anómalo")
     score: float | None = Field(None, description="Función de decisión del modelo (negativo = más anómalo)")
+
+
+class TelecontrolComandoIn(BaseModel):
+    """
+    Contrato de entrada del endpoint `POST /telecontrol/historial`.
+
+    Consumido por Node-RED (Tab 04 - Telecontrol) inmediatamente
+    después de validar y publicar un comando MQTT inverso hacia los
+    actuadores simulados (Sirena / Compuerta), para dejar constancia
+    persistente y redundante en PostgreSQL (tabla
+    `telecontrol_historial`, ver Capa_2/postgres/init.sql), de forma
+    independiente al Contexto Global de Node-RED.
+    """
+    comando_id: str = Field(..., description="Identificador único del comando, ej. 'TC-1728412345678'")
+    nodo_id: str = Field(..., description="Nodo objetivo del comando (ej. 'nodo_chancay_01')")
+    actuador: str = Field(..., pattern="^(sirena|compuerta)$", description="Actuador objetivo")
+    accion: str = Field(..., pattern="^(activar|desactivar)$", description="Acción a ejecutar")
+    operador: str = Field(default="operador_no_identificado", description="Operador que ejecuta la anulación manual")
+    origen: str = Field(default="panel_telecontrol_manual", description="Origen lógico del comando")
+    ts_comando: int = Field(..., description="Epoch (ms) de emisión del comando, generado por Node-RED")
+
+
+class TelecontrolComandoOut(TelecontrolComandoIn):
+    """Registro persistido, enriquecido con el timestamp de la BD."""
+    id: int
+    timestamp_registro: datetime
