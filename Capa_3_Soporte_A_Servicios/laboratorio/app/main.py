@@ -306,3 +306,4 @@ async def diagnosticar_lectura(data: SensorData):
     """
     es_anomalia, score = engine.analyze_con_score(data)
     return DiagnosticoOut(es_anomalia=es_anomalia, score=score)
+# redeploy-fix-fecha-z
