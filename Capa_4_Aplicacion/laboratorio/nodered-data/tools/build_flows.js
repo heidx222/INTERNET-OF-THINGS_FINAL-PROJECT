@@ -68,20 +68,15 @@ function nid(label) {
   return crypto.createHash("md5").update(base).digest("hex").slice(0, 16);
 }
 
-/** Replica exacta del cifrado de credenciales del runtime Node-RED. */
+/** Replica EXACTA del cifrado de credenciales del runtime real de Node-RED
+ *  (IV en hex + ciphertext en base64, concatenados como string). */
 function encryptCredentials(secret, credentialsMap) {
-  const key = crypto.createHash("sha256").update(secret).digest();
+  const encryptionKey = crypto.createHash("sha256").update(secret).digest();
   const initVector = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv("aes-256-ctr", key, initVector);
-  const encrypted = Buffer.concat([
-    initVector,
-    Buffer.from(
-      cipher.update(JSON.stringify(credentialsMap), "utf8", "binary") +
-        cipher.final("binary"),
-      "binary"
-    ),
-  ]);
-  return "$" + encrypted.toString("base64");
+  const cipher = crypto.createCipheriv("aes-256-ctr", encryptionKey, initVector);
+  let result = cipher.update(JSON.stringify(credentialsMap), "utf8", "base64") + cipher.final("base64");
+  result = initVector.toString("hex") + result;
+  return result;
 }
 
 const nodes = [];
