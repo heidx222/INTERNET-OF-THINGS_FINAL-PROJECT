@@ -10,8 +10,8 @@ import time
 import paho.mqtt.client as mqtt
 
 # --- CONFIGURACIÓN DE RED (Alineado con el ESP32 e IP de tu PC) ---
-MQTT_SERVER = "localhost"  # <--- COLOCA AQUÍ LA DIRECCIÓN IP DE TU COMPUTADORA
-MQTT_PORT = 1883
+MQTT_SERVER = "hayabusa.proxy.rlwy.net"  # <--- COLOCA AQUÍ LA DIRECCIÓN IP DE TU COMPUTADORA
+MQTT_PORT = 35329
 # [CORREGIDO] Credenciales exactas de PostgreSQL para el simulador histórico
 MQTT_USER = "simulador_python"
 MQTT_PASS = "simulador123"

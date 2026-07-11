@@ -1,0 +1,18 @@
+# 1. Usamos una imagen liviana de Python oficial
+FROM python:3.11-slim
+
+# 2. Establecemos el directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# 3. Copiamos el archivo de requerimientos primero (para aprovechar la caché de Docker)
+COPY requirements.txt ./
+
+# 4. Instalamos las dependencias necesarias (como paho-mqtt)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 5. Copiamos el script del simulador y el dataset CSV que necesita para leer los datos
+COPY script_simulator_mqtt.py ./
+COPY dataset_sintetico_chancay.csv ./
+
+# 6. Comando por defecto para arrancar el simulador automáticamente
+CMD ["python", "script_simulator_mqtt.py"]

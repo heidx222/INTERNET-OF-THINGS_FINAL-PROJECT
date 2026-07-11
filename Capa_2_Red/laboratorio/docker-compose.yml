@@ -11,6 +11,8 @@ services:
     volumes:
       # Inyecta el script para crear las tablas al iniciar la BD por primera vez
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Guarda los datos en tu disco duro local/Codespace
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
@@ -20,6 +22,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  simulador_mqtt:
+    build:
+      context: ../../Capa_2_Red/laboratorio
+      dockerfile: Dockerfile.simulator
+    container_name: sim_mqtt_chancay
+    networks:
+      - iot_network
+    depends_on:
+      - mosquitto
 
   mosquitto:
     image: iegomez/mosquitto-go-auth:latest
@@ -42,9 +54,9 @@ services:
     container_name: motor_ia_chancay
     ports:
       - "8000:8000"
-    depends_on:
-      mosquitto: 
-        condition: service_started
+    environment:
+      # Inyectamos la base de datos de producción para que guarde el histórico real
+      - DATABASE_URL=postgresql://adminChancayHuaral:adminChancayHuaral123@shortline.proxy.rlwy.net:21301/chancayhuaral_auth
     networks:
       - iot_network
   
@@ -63,6 +75,9 @@ services:
       - WA_INSTANCE=123456                      # <--- Tu Id de Instancia de Green-API
       - WA_TOKEN=abcdef1234567890yourtoken2026   # <--- Tu Token Secreto de Green-API
       - WA_RECIPIENT=519998887777@c.us            # <--- Número que recibirá las alertas
+      - MQTT_BROKER_HOST=hayabusa.proxy.rlwy.net
+      - MQTT_BROKER_PORT=35329
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     networks:
       - iot_network
     depends_on:
@@ -86,4 +101,5 @@ networks:
     driver: bridge
 
 volumes:
-  mosquitto_data: 
+  mosquitto_data:
+  postgres_data: 
