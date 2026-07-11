@@ -89,6 +89,13 @@ export default function Dashboard() {
           tone="aqua"
         />
         <KpiCard
+          icon={Thermometer}
+          label="Temp. del Ambiente"
+          value={lecturaActual?.temp_ambiente_c?.toFixed(1) ?? "—"}
+          unit="°C"
+          tone="aqua"
+        />
+        <KpiCard
           icon={FlaskConical}
           label="TDS"
           value={lecturaActual?.tds_ppm?.toFixed(0) ?? "—"}
