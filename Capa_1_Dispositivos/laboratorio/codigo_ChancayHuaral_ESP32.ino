@@ -22,10 +22,10 @@
 // al almacenamiento NVS (Preferences.h) o a un archivo de configuración
 // excluido del control de versiones (.gitignore).
 // ============================================================
-#define WIFI_SSID       "Red_Laboratorio_Chancay"
-#define WIFI_PASS       "Password_Seguro_Lab"
-#define MQTT_SERVER     "192.168.1.X"     
-#define MQTT_PORT       1883
+#define WIFI_SSID       "Galaxy A12DF7E"
+#define WIFI_PASS       "Contrasena"
+#define MQTT_SERVER     "hayabusa.proxy.rlwy.net"     
+#define MQTT_PORT       35329
 #define MQTT_USER       "nodo_chancay_01"
 #define MQTT_PASS       "nodoChancay01" 
 #define MQTT_CLIENT_ID  "ESP32_Cuenca_Chancay_01"
@@ -42,6 +42,7 @@
 #define PIN_DS18B20   4
 #define PIN_DHT11    15
 #define PIN_TDS      32
+#define PIN_PH       34   // [NUEVO] ADC1_CH6, input-only, libre de conflicto con WiFi
 #define TRIG_PIN      5
 #define ECHO_PIN     18
 
@@ -69,6 +70,7 @@ float tdsValue            = 0.0;
 int   rawTDS              = 0;
 float voltajeTDS          = 0.0;
 float distanciaNivel      = -1.0;     // cm; -1 = fuera de rango
+float phValue             = -999.0;   // -999 = sin lectura válida aún
 
 // Estado autonómico (ANALYZE)
 bool   alertaCritica  = false;
@@ -83,10 +85,26 @@ int    tipoEmergencia = 0;
 #define NIVEL_UMBRAL_ALTO  40.0   // cm — inundación detectada (distancia muy corta al sensor)
 #define NIVEL_UMBRAL_BAJO  50.0   // cm — nivel normalizado (el agua retrocede)
 
+// ============================================================
+// CALIBRACIÓN SENSOR DE pH (PH-4502C) [NUEVO]
+// ADVERTENCIA: Estos valores son de referencia. Debes calibrar
+// tu sensor específico con soluciones buffer pH 4.0 y pH 7.0,
+// tal como hiciste con el sensor de TDS.
+//
+// Pasos de calibración:
+//  1. Sumerge la sonda en buffer pH 7.0, anota el voltaje leído (V7).
+//  2. Sumerge la sonda en buffer pH 4.0, anota el voltaje leído (V4).
+//  3. PH_VOLTAGE_NEUTRO = V7
+//  4. PH_PENDIENTE = (4.0 - 7.0) / (V4 - V7)
+// ============================================================
+#define PH_VOLTAGE_NEUTRO  2.5    // Voltaje medido en buffer pH 7.0 — AJUSTAR TRAS CALIBRAR
+#define PH_PENDIENTE      -5.70   // Pendiente (pH/V) — AJUSTAR TRAS CALIBRAR
+
 // Control de tiempos asíncronos — STRIDE Disponibilidad [DoS interno]
 unsigned long lastLCDUpdate    = 0;
 unsigned long lastAlertaBuzzer = 0;
 unsigned long lastTdsSample    = 0;
+unsigned long lastPhSample     = 0;   // [NUEVO]
 unsigned long lastMqttPublish  = 0;
 unsigned long lastSerialPrint  = 0;
 unsigned long lastReconnect    = 0; 
@@ -97,6 +115,10 @@ unsigned long reconnectInterval = 2000; // Intervalo de backoff para reconexión
 long sumaRawTDS  = 0;
 int  muestrasTDS = 0;
 float tdsFactor  = 0.65;
+
+// pH — promediado asíncrono [NUEVO]
+long sumaRawPH   = 0;
+int  muestrasPH  = 0;
 
 // LCD — pantalla rotativa
 int pantallaActual = 0;
@@ -157,6 +179,7 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(TRIG_PIN, LOW);
+  // PIN_PH no requiere pinMode: analogRead lo configura como entrada automáticamente
 
   sensorDS18B20.begin();
   dht.begin();
@@ -196,6 +219,7 @@ void loop() {
   leerTemperaturaDS18B20();
   leerDHT11();   
   leerTDSAsincrono();
+  leerPHAsincrono();   // [NUEVO]
   leerDistanciaJSN_NoBloqueante();
 
   // ── 2. ANALYZE — Failsafe local con histéresis ─────────────
@@ -306,7 +330,9 @@ void publicarDatosRed() {
   float p_temp_amb = (temperaturaAmbiente != -999.0) ? temperaturaAmbiente : (21.0 + random(-1, 2));
   float p_temp_agua = (temperaturaAgua != -999.0) ? temperaturaAgua : (19.5 + (random(-5, 5)/10.0));
   float p_tds      = (tdsValue > 0) ? tdsValue : (230.0 + random(-10, 10)); // Ruido entre 220 y 240
-  float p_ph       = 7.39 + (random(-5, 5) / 100.0); // Oscila levemente entre 7.34 y 7.44
+  // [MODIFICADO] Ahora usamos la lectura real del sensor de pH; si aún no hay
+  // lectura válida (arranque), caemos al valor simulado como antes.
+  float p_ph       = (phValue != -999.0) ? phValue : (7.39 + (random(-5, 5) / 100.0));
   float p_turb     = 15.0 + random(-2, 3); // Oscila levemente
 
   char payload[256];
@@ -386,6 +412,36 @@ void leerTDSAsincrono() {
 
       sumaRawTDS  = 0;
       muestrasTDS = 0;
+    }
+  }
+}
+
+// ============================================================
+// [NUEVO] Lectura no bloqueante del sensor de pH (PH-4502C)
+// Mismo patrón de promediado asíncrono que usa el TDS, para no
+// bloquear el loop() ni afectar el watchdog.
+// ============================================================
+void leerPHAsincrono() {
+  if (millis() - lastPhSample >= 5) {
+    lastPhSample = millis();
+    sumaRawPH += analogRead(PIN_PH);
+    muestrasPH++;
+
+    if (muestrasPH >= 10) {
+      int rawPH       = sumaRawPH / 10;
+      float voltajePH = rawPH * (3.3 / 4095.0);
+
+      float ph = 7.0 + ((voltajePH - PH_VOLTAGE_NEUTRO) * PH_PENDIENTE);
+
+      // Rango físico plausible de pH; fuera de esto se considera lectura inválida
+      if (ph < 0.0 || ph > 14.0) {
+        phValue = -999.0;
+      } else {
+        phValue = ph;
+      }
+
+      sumaRawPH  = 0;
+      muestrasPH = 0;
     }
   }
 }
@@ -502,9 +558,17 @@ void actualizarLCD() {
       lcd.setCursor(0, 1);
       lcd.print(client.connected() ? "MQTT: OK" : "MQTT: --");
       break;
+
+    case 3:   // [NUEVO] Pantalla dedicada al sensor de pH
+      lcd.setCursor(0, 0); lcd.print("pH Agua: ");
+      if (phValue != -999.0) { lcd.print(phValue, 2); }
+      else { lcd.print("ERROR"); }
+      lcd.setCursor(0, 1);
+      lcd.print("Sonda PH-4502C");
+      break;
   }
 
-  pantallaActual = (pantallaActual + 1) % 3;  // 3 pantallas rotativas
+  pantallaActual = (pantallaActual + 1) % 4;  // [MODIFICADO] 4 pantallas rotativas (antes 3)
 }
 
 void ejecutarBuzzerAutonomo() {
@@ -531,6 +595,8 @@ void imprimirSerial() {
   Serial.println("========================================");
   Serial.print("ESTADO AUTÓNOMO : "); Serial.println(mensajeAlerta);
   Serial.print("TDS              : "); Serial.print(tdsValue, 0); Serial.println(" ppm");
+  Serial.print("pH Agua          : ");                                        // [NUEVO]
+  if (phValue != -999.0) { Serial.println(phValue, 2); } else { Serial.println("ERROR"); }
   Serial.print("Temp. Agua       : "); Serial.print(temperaturaAgua, 1); Serial.println(" °C");
   Serial.print("Temp. Ambiente   : "); Serial.print(temperaturaAmbiente, 1); Serial.println(" °C");
   Serial.print("Humedad          : "); Serial.print(humedad, 0); Serial.println(" %");   // [C8]
