@@ -23,6 +23,7 @@ El sistema emplea segregación estricta de tópicos. Ningún nodo puede escribir
 | `chancay/cuenca/historico` | Write | Python (Big Data) | Ráfaga masiva del dataset sintético para analítica. |
 | `chancay/actuadores/alerta/nodo_01` | Read | Gemelo ESP32 | Comando binario para activar alarmas remotas. |
 | `chancay/cuenca/#` | Read | Backend Central | Lectura global de toda la telemetría de la cuenca. |
+| `chancay/actuadores/comando/#` | Write | Capa 4 (`dashboard_nodered`) | Comandos MQTT inversos del Panel de Telecontrol (Sirena/Compuerta). |
 
 ## 3. Matriz de Mitigación de Amenazas (Enfoque STRIDE)
 Debido a la criticidad del monitoreo de desbordes, la Capa de Red implementa las siguientes contenciones en `mosquitto.conf` y su arquitectura:

@@ -44,3 +44,38 @@ class MapekEngine:
         # Isolation Forest retorna -1 para anomalías, 1 para normales
         prediccion = self.model.predict(features_df)
         return prediccion[0] == -1
+
+    def analyze_con_score(self, data: SensorData):
+        """
+        Variante extendida de la fase ANALYZE usada por el endpoint HTTP
+        `/diagnostico` (consumido por la Capa 4 - Node-RED).
+
+        Retorna una tupla (es_anomalia: bool, score: float | None), donde
+        `score` corresponde a la función de decisión de Isolation Forest
+        (`decision_function`): valores negativos indican mayor anormalidad,
+        valores positivos indican mayor normalidad. Se expone crudo para que
+        el Frontend "Yaku Qhawaq" pueda graduar visualmente la severidad.
+        """
+        if self.model is None:
+            return False, None
+
+        datos_para_ia = {
+            "nivel_m": [data.nivel_m],
+            "temp_ambiente_c": [data.temp_ambiente_c],
+            "temp_agua_c": [data.temp_agua_c],
+            "tds_ppm": [data.tds_ppm],
+            "ph": [data.ph],
+            "turbidez_ntu": [data.turbidez_ntu]
+        }
+        features_df = pd.DataFrame(datos_para_ia)
+
+        prediccion = self.model.predict(features_df)
+        es_anomalia = bool(prediccion[0] == -1)
+
+        score = None
+        try:
+            score = float(self.model.decision_function(features_df)[0])
+        except Exception:
+            score = None
+
+        return es_anomalia, score

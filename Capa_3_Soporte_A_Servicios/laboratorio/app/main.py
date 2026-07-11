@@ -9,9 +9,12 @@ import warnings # <-- NUEVO: Importar la librería de advertencias
 # <-- NUEVO: Silenciar específicamente la queja de sklearn sobre los nombres de las columnas
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
-from app.schemas import SensorData, AlertaOut
+from app.schemas import SensorData, AlertaOut, DiagnosticoOut
 from app.services.mapek_engine import MapekEngine
 from pydantic import ValidationError
+from datetime import datetime
+from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configuraciones de red
 MQTT_BROKER = "broker_chancay_huaral"
@@ -128,6 +131,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Motor Autonómico MAPE-K", lifespan=lifespan)
 
+# [CAPA 4] Habilitar CORS a nivel de microservicio también, como defensa en
+# profundidad adicional a la configurada en Node-RED (settings.js -> httpNodeCors).
+# Necesario porque el endpoint /diagnostico y /telemetria/historico pueden ser
+# consultados directamente en entornos de depuración desde el navegador.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 @app.get("/telemetria/reciente")
 async def obtener_telemetria(limit: int = 20):
     """Endpoint para que la Capa 4 consulte los datos históricos guardados"""
@@ -137,3 +152,71 @@ async def obtener_telemetria(limit: int = 20):
             "SELECT * FROM telemetria_cuenca ORDER BY timestamp_registro DESC LIMIT $1;", limit
         )
         return [dict(row) for row in rows]
+
+@app.get("/telemetria/historico")
+async def obtener_telemetria_historico(
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    nodo_id: Optional[str] = None,
+    limit: int = 500,
+):
+    """
+    [CAPA 4] Endpoint consultado por Node-RED (`GET /api/telemetria/historico`)
+    para alimentar la Sección de Estadísticas Históricas del Frontend
+    "Yaku Qhawaq" (tablas, selectores de fecha y tendencias de salud hídrica).
+
+    Parámetros:
+      - desde / hasta: Fechas ISO-8601 (ej. '2026-06-01T00:00:00') para
+        acotar el rango de `timestamp_registro`.
+      - nodo_id: Filtra por un nodo específico de la cuenca.
+      - limit: Tope de registros retornados (por defecto 500).
+    """
+    pool = app_state.get("db_pool")
+    if not pool:
+        return []
+
+    condiciones = []
+    valores = []
+    idx = 1
+
+    if desde:
+        condiciones.append(f"timestamp_registro >= ${idx}")
+        valores.append(datetime.fromisoformat(desde))
+        idx += 1
+    if hasta:
+        condiciones.append(f"timestamp_registro <= ${idx}")
+        valores.append(datetime.fromisoformat(hasta))
+        idx += 1
+    if nodo_id:
+        condiciones.append(f"nodo_id = ${idx}")
+        valores.append(nodo_id)
+        idx += 1
+
+    where_clause = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    valores.append(limit)
+
+    query = f"""
+        SELECT * FROM telemetria_cuenca
+        {where_clause}
+        ORDER BY timestamp_registro DESC
+        LIMIT ${idx};
+    """
+
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(query, *valores)
+        return [dict(row) for row in rows]
+
+@app.post("/diagnostico", response_model=DiagnosticoOut)
+async def diagnosticar_lectura(data: SensorData):
+    """
+    [CAPA 4] Endpoint síncrono consultado por Node-RED (Tab 01 - Ingesta MQTT)
+    en cada lectura recibida por el broker, para obtener un veredicto de
+    Isolation Forest de forma inmediata (fase ANALYZE bajo demanda), en
+    paralelo al lazo autónomo asíncrono que ya corre en `mqtt_listener()`.
+
+    Esto permite que el Frontend reciba el diagnóstico fusionado con la
+    lectura casi en tiempo real, sin depender exclusivamente de la
+    persistencia en PostgreSQL.
+    """
+    es_anomalia, score = engine.analyze_con_score(data)
+    return DiagnosticoOut(es_anomalia=es_anomalia, score=score)

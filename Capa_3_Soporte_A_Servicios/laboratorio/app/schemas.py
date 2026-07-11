@@ -12,3 +12,13 @@ class AlertaOut(BaseModel):
     comando: str
     motivo: str
     severidad: str
+
+class DiagnosticoOut(BaseModel):
+    """
+    Contrato de respuesta del endpoint síncrono `POST /diagnostico`.
+    Consumido por la Capa 4 (Node-RED) en el pipeline de ingesta en
+    tiempo real para fusionar cada lectura MQTT con el veredicto de
+    la IA antes de retransmitirla al Frontend "Yaku Qhawaq".
+    """
+    es_anomalia: bool = Field(..., description="True si Isolation Forest detecta un patrón anómalo")
+    score: float | None = Field(None, description="Función de decisión del modelo (negativo = más anómalo)")

@@ -60,6 +60,10 @@ INSERT INTO test_user (username, password_hash) VALUES (
 );
 INSERT INTO test_acl (username, topic, rw) VALUES ('dashboard_nodered', 'chancay/cuenca/#', 1);
 INSERT INTO test_acl (username, topic, rw) VALUES ('dashboard_nodered', 'chancay/actuadores/alerta/#', 1);
+-- [CAPA 4 - TELECONTROL] Permiso de ESCRITURA (rw = 2) para que el Panel de
+-- Telecontrol de "Yaku Qhawaq" pueda publicar comandos MQTT inversos
+-- (activar/desactivar Sirena o Compuerta) hacia los actuadores simulados.
+INSERT INTO test_acl (username, topic, rw) VALUES ('dashboard_nodered', 'chancay/actuadores/comando/#', 2);
 
 -- Tabla para almacenar el histórico de sensores (Conocimiento - K), usada por Capa 3
 CREATE TABLE IF NOT EXISTS telemetria_cuenca (
