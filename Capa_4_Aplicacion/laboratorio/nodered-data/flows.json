@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "01 - Ingesta MQTT y Diagnóstico IA",
         "disabled": false,
-        "info": "## Ingesta MQTT y Diagnóstico IA\n\nSe suscribe al Broker MQTT (`mosquitto-broker.railway.internal:1883`) para recibir la telemetría en tiempo real de los nodos de la cuenca (tópico `chancay/cuenca/tiempo_real/#`).\n\nCada lectura se normaliza, se envía al microservicio de IA `motor_ia_chancay` (Isolation Forest, endpoint `POST /diagnostico`) para obtener un veredicto de anomalía independiente, se fusiona con un índice de Salud Hídrica calculado localmente, se cachea en el contexto global y se retransmite en vivo al Frontend vía WebSocket (`/ws/telemetria`).\n\nTambién escucha directamente el tópico `chancay/actuadores/alerta/#` en el cual el propio lazo MAPE-K de la Capa 3 publica sus veredictos críticos, para no perder ninguna alerta aunque el Frontend no esté conectado en ese instante."
+        "info": "## Ingesta MQTT y Diagnóstico IA\n\nSe suscribe al Broker MQTT (`victorious-exploration.railway.internal:1883`) para recibir la telemetría en tiempo real de los nodos de la cuenca (tópico `chancay/cuenca/tiempo_real/#`).\n\nCada lectura se normaliza, se envía al microservicio de IA `motor_ia_chancay` (Isolation Forest, endpoint `POST /diagnostico`) para obtener un veredicto de anomalía independiente, se fusiona con un índice de Salud Hídrica calculado localmente, se cachea en el contexto global y se retransmite en vivo al Frontend vía WebSocket (`/ws/telemetria`).\n\nTambién escucha directamente el tópico `chancay/actuadores/alerta/#` en el cual el propio lazo MAPE-K de la Capa 3 publica sus veredictos críticos, para no perder ninguna alerta aunque el Frontend no esté conectado en ese instante."
     },
     {
         "id": "57092b1795a11953",
@@ -30,8 +30,8 @@
     {
         "id": "b3dfd4a8381733ae",
         "type": "mqtt-broker",
-        "name": "Broker Chancay-Huaral (mosquitto-broker.railway.internal:1883)",
-        "broker": "mosquitto-broker.railway.internal",
+        "name": "Broker Chancay-Huaral (victorious-exploration.railway.internal:1883)",
+        "broker": "victorious-exploration.railway.internal",
         "port": "1883",
         "clientid": "nodered_yaku_qhawaq",
         "autoConnect": true,
@@ -39,9 +39,18 @@
         "protocolVersion": "4",
         "keepalive": "30",
         "cleansession": true,
+        "autoUnsubscribe": true,
         "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
         "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
         "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
         "userProps": "",
         "sessionExpiry": ""
     },
@@ -83,7 +92,6 @@
         "type": "function",
         "z": "2db641724de09348",
         "name": "Normalizar Lectura",
-        "info": "Extrae el `nodo_id` desde el tópico MQTT, valida el JSON recibido y construye un objeto de lectura estandarizado. Si el payload no es un JSON válido o carece de campos obligatorios, descarta el mensaje (mitigación STRIDE - Tampering) y lo registra en el nodo de estado.",
         "func": "// Normaliza la lectura entrante y prepara el body para el motor de IA\nlet data;\ntry {\n    data = (typeof msg.payload === 'string') ? JSON.parse(msg.payload) : msg.payload;\n} catch (e) {\n    node.warn('Payload MQTT no es JSON válido: ' + msg.payload);\n    return null;\n}\n\nconst REQUIRED = ['nivel_m','temp_ambiente_c','temp_agua_c','tds_ppm','ph','turbidez_ntu'];\nconst faltantes = REQUIRED.filter(k => typeof data[k] !== 'number');\nif (faltantes.length > 0) {\n    node.warn('Lectura descartada. Campos inválidos/faltantes: ' + faltantes.join(', '));\n    return null;\n}\n\nconst nodoId = msg.topic ? msg.topic.split('/').pop() : (data.node_id || 'nodo_desconocido');\n\nconst lectura = {\n    nodo_id: nodoId,\n    ts: Date.now(),\n    nivel_m: data.nivel_m,\n    temp_ambiente_c: data.temp_ambiente_c,\n    temp_agua_c: data.temp_agua_c,\n    tds_ppm: data.tds_ppm,\n    ph: data.ph,\n    turbidez_ntu: data.turbidez_ntu\n};\n\nmsg.lectura = lectura;\n// Body exacto que espera el esquema Pydantic SensorData del motor_ia_chancay\nmsg.payload = {\n    nivel_m: lectura.nivel_m,\n    temp_ambiente_c: lectura.temp_ambiente_c,\n    temp_agua_c: lectura.temp_agua_c,\n    tds_ppm: lectura.tds_ppm,\n    ph: lectura.ph,\n    turbidez_ntu: lectura.turbidez_ntu\n};\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -97,7 +105,8 @@
             [
                 "5336a440b6b7235f"
             ]
-        ]
+        ],
+        "info": "Extrae el `nodo_id` desde el tópico MQTT, valida el JSON recibido y construye un objeto de lectura estandarizado. Si el payload no es un JSON válido o carece de campos obligatorios, descarta el mensaje (mitigación STRIDE - Tampering) y lo registra en el nodo de estado."
     },
     {
         "id": "5336a440b6b7235f",
@@ -135,7 +144,6 @@
         "type": "function",
         "z": "2db641724de09348",
         "name": "Fusionar Diagnóstico IA + Salud Hídrica",
-        "info": "Combina la lectura normalizada con la respuesta del microservicio de IA (`es_anomalia`, `score`) y calcula un Índice de Salud Hídrica (0-100%) en base a rangos técnicos de referencia (pH, TDS, turbidez, nivel). Si `motor_ia_chancay` no respondiera (timeout de red), aplica un modo 'fail-safe' que NO bloquea el pipeline: continúa el flujo marcando `ia_disponible = false`.",
         "func": "const lectura = msg.lectura || {};\nconst diag = (msg.payload && typeof msg.payload === 'object') ? msg.payload : null;\nconst iaDisponible = !!diag && (typeof diag.es_anomalia !== 'undefined');\n\n// --- Cálculo del Índice de Salud Hídrica (0 a 100) ---\nfunction puntuar(valor, ideal_min, ideal_max, limite_min, limite_max) {\n    if (valor >= ideal_min && valor <= ideal_max) return 100;\n    if (valor < ideal_min) {\n        if (valor <= limite_min) return 0;\n        return Math.round(100 * (valor - limite_min) / (ideal_min - limite_min));\n    }\n    if (valor >= limite_max) return 0;\n    return Math.round(100 * (limite_max - valor) / (limite_max - ideal_max));\n}\n\nconst scorePh = puntuar(lectura.ph, 6.5, 8.5, 4.0, 11.0);\nconst scoreTds = puntuar(lectura.tds_ppm, 0, 500, 0, 1200);\nconst scoreTurbidez = puntuar(lectura.turbidez_ntu, 0, 50, 0, 600);\nconst scoreNivel = puntuar(lectura.nivel_m, 0.40, 3.0, 0.10, 5.0);\n\nlet saludHidrica = Math.round((scorePh + scoreTds + scoreTurbidez + scoreNivel) / 4);\nif (iaDisponible && diag.es_anomalia) {\n    saludHidrica = Math.min(saludHidrica, 35); // Penalización dura ante veredicto de IA\n}\n\nconst fusion = {\n    ...lectura,\n    diagnostico: {\n        ia_disponible: iaDisponible,\n        es_anomalia: iaDisponible ? !!diag.es_anomalia : false,\n        score: iaDisponible ? (diag.score !== undefined ? diag.score : null) : null\n    },\n    salud_hidrica_pct: saludHidrica\n};\n\nmsg.payload = fusion;\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -151,14 +159,14 @@
                 "e994f0efeeebdfcf",
                 "30953fb27c77add1"
             ]
-        ]
+        ],
+        "info": "Combina la lectura normalizada con la respuesta del microservicio de IA (`es_anomalia`, `score`) y calcula un Índice de Salud Hídrica (0-100%) en base a rangos técnicos de referencia (pH, TDS, turbidez, nivel). Si `motor_ia_chancay` no respondiera (timeout de red), aplica un modo 'fail-safe' que NO bloquea el pipeline: continúa el flujo marcando `ia_disponible = false`."
     },
     {
         "id": "3a4d37e092b7b9c8",
         "type": "function",
         "z": "2db641724de09348",
         "name": "Actualizar Cache y Series",
-        "info": "Escribe la lectura fusionada en el Contexto Global de Node-RED:\n- `telemetria_cache`: último valor conocido por nodo (para /api/telemetria/actual).\n- `series_buffer`: buffer circular (máx. 500) por nodo, usado por los gráficos de series temporales del Dashboard.",
         "func": "const MAX_BUFFER = 500;\nconst lectura = msg.payload;\nif (!lectura || !lectura.nodo_id) return null;\n\nlet cache = global.get('telemetria_cache') || {};\ncache[lectura.nodo_id] = lectura;\nglobal.set('telemetria_cache', cache);\n\nlet series = global.get('series_buffer') || {};\nif (!series[lectura.nodo_id]) series[lectura.nodo_id] = [];\nseries[lectura.nodo_id].push(lectura);\nif (series[lectura.nodo_id].length > MAX_BUFFER) {\n    series[lectura.nodo_id] = series[lectura.nodo_id].slice(-MAX_BUFFER);\n}\nglobal.set('series_buffer', series);\n\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -170,7 +178,8 @@
         "y": 60,
         "wires": [
             []
-        ]
+        ],
+        "info": "Escribe la lectura fusionada en el Contexto Global de Node-RED:\n- `telemetria_cache`: último valor conocido por nodo (para /api/telemetria/actual).\n- `series_buffer`: buffer circular (máx. 500) por nodo, usado por los gráficos de series temporales del Dashboard."
     },
     {
         "id": "e994f0efeeebdfcf",
@@ -245,7 +254,6 @@
         "type": "function",
         "z": "2db641724de09348",
         "name": "Normalizar Alerta MQTT Directa",
-        "info": "Traduce el mensaje `AlertaOut` publicado directamente por el lazo MAPE-K de `motor_ia_chancay` (tópico `chancay/actuadores/alerta/#`) al esquema unificado de alertas usado por el Motor de Alertas (Tab 02), garantizando que NINGUNA alerta crítica se pierda incluso si esta instancia de Node-RED reinicia o pierde el HTTP de diagnóstico.",
         "func": "let data;\ntry {\n    data = (typeof msg.payload === 'string') ? JSON.parse(msg.payload) : msg.payload;\n} catch (e) {\n    node.warn('Alerta MQTT con payload inválido: ' + msg.payload);\n    return null;\n}\n\nconst nodoId = msg.topic ? msg.topic.split('/').pop() : 'desconocido';\n\nmsg.payload = {\n    nodo_id: nodoId,\n    origen: 'motor_ia_chancay (MQTT directo)',\n    severidad: (data.severidad || 'ALTA').toUpperCase() === 'ALTA' ? 'CRITICO' : 'ADVERTENCIA',\n    tipo: data.comando || 'ANOMALIA_DETECTADA',\n    mensaje: data.motivo || 'Anomalía crítica detectada por el motor de IA.',\n    lectura: null\n};\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -259,7 +267,8 @@
             [
                 "373bbb0d86badedc"
             ]
-        ]
+        ],
+        "info": "Traduce el mensaje `AlertaOut` publicado directamente por el lazo MAPE-K de `motor_ia_chancay` (tópico `chancay/actuadores/alerta/#`) al esquema unificado de alertas usado por el Motor de Alertas (Tab 02), garantizando que NINGUNA alerta crítica se pierda incluso si esta instancia de Node-RED reinicia o pierde el HTTP de diagnóstico."
     },
     {
         "id": "373bbb0d86badedc",
@@ -306,7 +315,6 @@
         "type": "function",
         "z": "57092b1795a11953",
         "name": "Clasificar Severidad y Registrar",
-        "info": "Determina la severidad final (`CRITICO` / `ADVERTENCIA`) según el parámetro físico que originó la anomalía, construye el registro estándar de alerta y lo agrega al historial persistente en el Contexto Global (`alertas_historial`, tope 2000 registros, respaldado en disco por `contextStorage`, ver settings.js).",
         "func": "const MAX_HIST = 2000;\nconst p = msg.payload || {};\n\nlet severidad = p.severidad || 'ADVERTENCIA';\nlet tipo = p.tipo || 'ANOMALIA_DETECTADA';\nlet mensaje = p.mensaje || 'Anomalía detectada por el sistema.';\nconst lectura = p.lectura;\n\n// Reclasificación fina si contamos con la lectura física original\nif (lectura) {\n    if (lectura.nivel_m < 0.40) {\n        severidad = 'CRITICO'; tipo = 'RIESGO_DESBORDE';\n        mensaje = `Nivel del río crítico: ${lectura.nivel_m} m (< 0.40 m). Riesgo de desborde/huayco.`;\n    } else if (lectura.turbidez_ntu > 500) {\n        severidad = 'CRITICO'; tipo = 'ARRASTRE_SEDIMENTOS';\n        mensaje = `Turbidez extrema: ${lectura.turbidez_ntu} NTU. Posible huayco / arrastre de sedimentos.`;\n    } else if (lectura.tds_ppm > 500) {\n        severidad = 'ADVERTENCIA'; tipo = 'CONTAMINACION_QUIMICA';\n        mensaje = `TDS elevado: ${lectura.tds_ppm} ppm (> 500 ppm). Posible vertimiento químico/minero.`;\n    } else if (lectura.ph < 6.5 || lectura.ph > 8.5) {\n        severidad = 'ADVERTENCIA'; tipo = 'PH_FUERA_DE_RANGO';\n        mensaje = `pH fuera de rango seguro: ${lectura.ph}.`;\n    } else {\n        severidad = 'ADVERTENCIA'; tipo = tipo || 'ANOMALIA_MULTIVARIABLE';\n        mensaje = 'Isolation Forest detectó un patrón anómalo en la firma combinada de sensores.';\n    }\n}\n\nconst alerta = {\n    id: `AL-${Date.now()}-${Math.floor(Math.random()*1000)}`,\n    ts: Date.now(),\n    fecha_iso: new Date().toISOString(),\n    nodo_id: p.nodo_id || 'desconocido',\n    severidad,\n    tipo,\n    mensaje,\n    origen: p.origen || 'motor_ia_chancay (HTTP /diagnostico)',\n    lectura: lectura || null,\n    atendida: false\n};\n\nlet historial = global.get('alertas_historial') || [];\nhistorial.unshift(alerta);\nif (historial.length > MAX_HIST) historial = historial.slice(0, MAX_HIST);\nglobal.set('alertas_historial', historial);\n\nmsg.payload = alerta;\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -320,7 +328,8 @@
             [
                 "a2ef27eae299786c"
             ]
-        ]
+        ],
+        "info": "Determina la severidad final (`CRITICO` / `ADVERTENCIA`) según el parámetro físico que originó la anomalía, construye el registro estándar de alerta y lo agrega al historial persistente en el Contexto Global (`alertas_historial`, tope 2000 registros, respaldado en disco por `contextStorage`, ver settings.js)."
     },
     {
         "id": "a2ef27eae299786c",
@@ -413,7 +422,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Leer Cache de Telemetría",
-        "info": "Devuelve el último snapshot conocido de todos los nodos (o de un `nodo_id` específico vía querystring) directamente desde el Contexto Global, sin necesidad de golpear la base de datos (baja latencia, ideal para refresco del Dashboard cada pocos segundos).",
         "func": "const cache = global.get('telemetria_cache') || {};\nconst nodoId = msg.req.query.nodo_id;\n\nmsg.payload = nodoId ? (cache[nodoId] || {}) : Object.values(cache);\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -427,7 +435,8 @@
             [
                 "1dceab6063a53cb4"
             ]
-        ]
+        ],
+        "info": "Devuelve el último snapshot conocido de todos los nodos (o de un `nodo_id` específico vía querystring) directamente desde el Contexto Global, sin necesidad de golpear la base de datos (baja latencia, ideal para refresco del Dashboard cada pocos segundos)."
     },
     {
         "id": "1dceab6063a53cb4",
@@ -462,7 +471,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Leer Serie Temporal (Buffer en memoria)",
-        "info": "Sirve la serie temporal de un nodo específico (`nodo_id`, obligatorio) acotada por `limit` (por defecto 200), usada por los gráficos de líneas (Nivel, Caudal estimado, pH, TDS) del Dashboard.",
         "func": "const series = global.get('series_buffer') || {};\nconst nodoId = msg.req.query.nodo_id || 'nodo_chancay_01';\nconst limit = parseInt(msg.req.query.limit) || 200;\n\nconst datos = (series[nodoId] || []).slice(-limit);\nmsg.payload = { nodo_id: nodoId, total: datos.length, datos };\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -476,7 +484,8 @@
             [
                 "cd48c9310e6cd57b"
             ]
-        ]
+        ],
+        "info": "Sirve la serie temporal de un nodo específico (`nodo_id`, obligatorio) acotada por `limit` (por defecto 200), usada por los gráficos de líneas (Nivel, Caudal estimado, pH, TDS) del Dashboard."
     },
     {
         "id": "cd48c9310e6cd57b",
@@ -511,7 +520,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Preparar Consulta Histórica",
-        "info": "Traduce los parámetros de la Sección de Estadísticas Históricas (`desde`, `hasta`, `nodo_id`, `limit`) hacia el endpoint persistente `GET /telemetria/historico` del microservicio `motor_ia_chancay` (PostgreSQL, tabla `telemetria_cuenca`).",
         "func": "const q = msg.req.query || {};\nconst params = new URLSearchParams();\nif (q.desde) params.set('desde', q.desde);\nif (q.hasta) params.set('hasta', q.hasta);\nif (q.nodo_id) params.set('nodo_id', q.nodo_id);\nparams.set('limit', q.limit || '500');\n\nmsg.url = `${flow.get('MOTOR_IA_BASE_URL')}/telemetria/historico?${params.toString()}`;\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -525,7 +533,8 @@
             [
                 "5f421a9edef8dad1"
             ]
-        ]
+        ],
+        "info": "Traduce los parámetros de la Sección de Estadísticas Históricas (`desde`, `hasta`, `nodo_id`, `limit`) hacia el endpoint persistente `GET /telemetria/historico` del microservicio `motor_ia_chancay` (PostgreSQL, tabla `telemetria_cuenca`)."
     },
     {
         "id": "5f421a9edef8dad1",
@@ -604,7 +613,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Leer Historial de Alertas",
-        "info": "Fuente del panel de Notificaciones en Tiempo Real y del Historial cronológico de anomalías. Soporta filtros `?severidad=CRITICO|ADVERTENCIA`, `?nodo_id=` y `?limit=` (por defecto 100).",
         "func": "let historial = global.get('alertas_historial') || [];\nconst q = msg.req.query || {};\n\nif (q.severidad) {\n    historial = historial.filter(a => a.severidad === q.severidad.toUpperCase());\n}\nif (q.nodo_id) {\n    historial = historial.filter(a => a.nodo_id === q.nodo_id);\n}\nconst limit = parseInt(q.limit) || 100;\n\nmsg.payload = {\n    total: historial.length,\n    criticas: historial.filter(a => a.severidad === 'CRITICO').length,\n    advertencias: historial.filter(a => a.severidad === 'ADVERTENCIA').length,\n    alertas: historial.slice(0, limit)\n};\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -618,7 +626,8 @@
             [
                 "830c199cb01ead8d"
             ]
-        ]
+        ],
+        "info": "Fuente del panel de Notificaciones en Tiempo Real y del Historial cronológico de anomalías. Soporta filtros `?severidad=CRITICO|ADVERTENCIA`, `?nodo_id=` y `?limit=` (por defecto 100)."
     },
     {
         "id": "830c199cb01ead8d",
@@ -653,7 +662,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Fusionar Metadatos GIS + Telemetría Actual",
-        "info": "Fuente del Mapa Geográfico (Leaflet). Combina las coordenadas estáticas de los nodos de monitoreo de la cuenca con su última lectura conocida, para mostrarlas en los popups del mapa.",
         "func": "const NODOS_GIS = [\n    { nodo_id: 'nodo_chancay_01', nombre: 'Puente Huando (Estación Principal)', lat: -11.4959, lng: -77.2072, estado_infraestructura: 'ACTIVO' },\n    { nodo_id: 'nodo_chancay_02', nombre: 'Media Cuenca - Acos (Planificado)', lat: -11.3336, lng: -76.7864, estado_infraestructura: 'PLANIFICADO' },\n    { nodo_id: 'nodo_chancay_03', nombre: 'Desembocadura - Chancay (Planificado)', lat: -11.5744, lng: -77.2694, estado_infraestructura: 'PLANIFICADO' }\n];\n\nconst cache = global.get('telemetria_cache') || {};\nmsg.payload = NODOS_GIS.map(n => ({ ...n, ultima_lectura: cache[n.nodo_id] || null }));\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -667,7 +675,8 @@
             [
                 "a9fa198b1c30150e"
             ]
-        ]
+        ],
+        "info": "Fuente del Mapa Geográfico (Leaflet). Combina las coordenadas estáticas de los nodos de monitoreo de la cuenca con su última lectura conocida, para mostrarlas en los popups del mapa."
     },
     {
         "id": "a9fa198b1c30150e",
@@ -702,7 +711,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Calcular Salud Hídrica Global",
-        "info": "Promedia el `salud_hidrica_pct` de todos los nodos activos para obtener el indicador general de la cuenca mostrado en los widgets tipo gauge del Dashboard.",
         "func": "const cache = global.get('telemetria_cache') || {};\nconst lecturas = Object.values(cache);\n\nconst promedio = lecturas.length\n    ? Math.round(lecturas.reduce((acc, l) => acc + (l.salud_hidrica_pct || 0), 0) / lecturas.length)\n    : null;\n\nlet estado = 'SIN_DATOS';\nif (promedio !== null) {\n    if (promedio >= 75) estado = 'OPTIMO';\n    else if (promedio >= 45) estado = 'ADVERTENCIA';\n    else estado = 'CRITICO';\n}\n\nmsg.payload = { salud_hidrica_pct: promedio, estado, nodos_evaluados: lecturas.length, ts: Date.now() };\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -716,7 +724,8 @@
             [
                 "8f1c8ee380cec778"
             ]
-        ]
+        ],
+        "info": "Promedia el `salud_hidrica_pct` de todos los nodos activos para obtener el indicador general de la cuenca mostrado en los widgets tipo gauge del Dashboard."
     },
     {
         "id": "8f1c8ee380cec778",
@@ -751,7 +760,6 @@
         "type": "function",
         "z": "f542c6aa8b91ca35",
         "name": "Generar CSV de Auditoría",
-        "info": "Exportación de Auditoría para reportes gerenciales. Parámetro `?tipo=alertas` (default) exporta el historial de anomalías; `?tipo=lecturas&nodo_id=` exporta la serie temporal en buffer de un nodo. Responde con `Content-Disposition: attachment` para forzar la descarga directa desde el navegador.",
         "func": "function toCsv(rows, columnas) {\n    const escape = (v) => {\n        if (v === null || v === undefined) return '';\n        const s = String(v).replace(/\"/g, '\"\"');\n        return /[,\"\\n]/.test(s) ? `\"${s}\"` : s;\n    };\n    const header = columnas.join(',');\n    const body = rows.map(r => columnas.map(c => escape(r[c])).join(',')).join('\\n');\n    return header + '\\n' + body;\n}\n\nconst tipo = (msg.req.query.tipo || 'alertas').toLowerCase();\nlet csv, filename;\n\nif (tipo === 'lecturas') {\n    const nodoId = msg.req.query.nodo_id || 'nodo_chancay_01';\n    const series = global.get('series_buffer') || {};\n    const datos = (series[nodoId] || []).map(d => ({\n        ts: new Date(d.ts).toISOString(), nodo_id: d.nodo_id, nivel_m: d.nivel_m,\n        temp_ambiente_c: d.temp_ambiente_c, temp_agua_c: d.temp_agua_c,\n        tds_ppm: d.tds_ppm, ph: d.ph, turbidez_ntu: d.turbidez_ntu,\n        es_anomalia: d.diagnostico ? d.diagnostico.es_anomalia : false,\n        salud_hidrica_pct: d.salud_hidrica_pct\n    }));\n    csv = toCsv(datos, ['ts','nodo_id','nivel_m','temp_ambiente_c','temp_agua_c','tds_ppm','ph','turbidez_ntu','es_anomalia','salud_hidrica_pct']);\n    filename = `lecturas_${nodoId}_${Date.now()}.csv`;\n} else {\n    const historial = (global.get('alertas_historial') || []).map(a => ({\n        id: a.id, fecha_iso: a.fecha_iso, nodo_id: a.nodo_id, severidad: a.severidad,\n        tipo: a.tipo, mensaje: a.mensaje, origen: a.origen, atendida: a.atendida\n    }));\n    csv = toCsv(historial, ['id','fecha_iso','nodo_id','severidad','tipo','mensaje','origen','atendida']);\n    filename = `alertas_chancay_huaral_${Date.now()}.csv`;\n}\n\nmsg.payload = csv;\nmsg.headers = {\n    'Content-Type': 'text/csv; charset=utf-8',\n    'Content-Disposition': `attachment; filename=\"${filename}\"`\n};\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -765,7 +773,8 @@
             [
                 "cf001a354001283d"
             ]
-        ]
+        ],
+        "info": "Exportación de Auditoría para reportes gerenciales. Parámetro `?tipo=alertas` (default) exporta el historial de anomalías; `?tipo=lecturas&nodo_id=` exporta la serie temporal en buffer de un nodo. Responde con `Content-Disposition: attachment` para forzar la descarga directa desde el navegador."
     },
     {
         "id": "cf001a354001283d",
@@ -844,6 +853,49 @@
         "wires": []
     },
     {
+        "id": "48d13d8c0f62b918",
+        "type": "inject",
+        "z": "f542c6aa8b91ca35",
+        "name": "Inicializar Configuración (al desplegar)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 700,
+        "wires": [
+            [
+                "3cc35c73239b2822"
+            ]
+        ]
+    },
+    {
+        "id": "3cc35c73239b2822",
+        "type": "function",
+        "z": "f542c6aa8b91ca35",
+        "name": "Set MOTOR_IA_BASE_URL en flow context",
+        "func": "flow.set('MOTOR_IA_BASE_URL', 'http://internet-of-thingsfinal-project.railway.internal:8000');\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 700,
+        "wires": [
+            []
+        ]
+    },
+    {
         "id": "4afedd85e1d7353c",
         "type": "http in",
         "z": "76385a4aee35babb",
@@ -865,7 +917,6 @@
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Validar Comando de Telecontrol",
-        "info": "Valida estrictamente el body recibido antes de publicar cualquier comando MQTT (mitigación STRIDE - Tampering / Elevation of Privilege). Body esperado:\n```json\n{ \"nodo_id\": \"nodo_chancay_01\", \"actuador\": \"sirena|compuerta\", \"accion\": \"activar|desactivar\", \"operador\": \"nombre_opcional\" }\n```",
         "func": "const NODOS_VALIDOS = ['nodo_chancay_01','nodo_chancay_02','nodo_chancay_03'];\nconst ACTUADORES_VALIDOS = ['sirena','compuerta'];\nconst ACCIONES_VALIDAS = ['activar','desactivar'];\n\nconst body = msg.payload || {};\nconst { nodo_id, actuador, accion, operador } = body;\n\nconst errores = [];\nif (!NODOS_VALIDOS.includes(nodo_id)) errores.push(`nodo_id inválido: ${nodo_id}`);\nif (!ACTUADORES_VALIDOS.includes(actuador)) errores.push(`actuador inválido: ${actuador}`);\nif (!ACCIONES_VALIDAS.includes(accion)) errores.push(`accion inválida: ${accion}`);\n\nif (errores.length > 0) {\n    msg.statusCode = 400;\n    msg.payload = { error: true, detalles: errores };\n    msg.headers = { 'Content-Type': 'application/json' };\n    msg.comandoValido = false;\n    return msg;\n}\n\nmsg.comandoValido = true;\nmsg.comando = {\n    id: `TC-${Date.now()}`,\n    ts: Date.now(),\n    nodo_id, actuador, accion,\n    operador: operador || 'operador_no_identificado',\n    origen: 'panel_telecontrol_manual'\n};\nmsg.topic = `chancay/actuadores/comando/${nodo_id}`;\nmsg.payload = JSON.stringify(msg.comando);\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -879,7 +930,8 @@
             [
                 "a71660ad8c76bf98"
             ]
-        ]
+        ],
+        "info": "Valida estrictamente el body recibido antes de publicar cualquier comando MQTT (mitigación STRIDE - Tampering / Elevation of Privilege). Body esperado:\n```json\n{ \"nodo_id\": \"nodo_chancay_01\", \"actuador\": \"sirena|compuerta\", \"accion\": \"activar|desactivar\", \"operador\": \"nombre_opcional\" }\n```"
     },
     {
         "id": "a71660ad8c76bf98",
@@ -931,7 +983,6 @@
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Registrar en Bitácora de Auditoría",
-        "info": "Guarda cada acción de telecontrol manual en `telecontrol_historial` (Contexto Global, tope 500 registros) para trazabilidad y auditoría, y construye la respuesta HTTP de confirmación (ACK) al Frontend.",
         "func": "const MAX_HIST = 500;\nlet historial = global.get('telecontrol_historial') || [];\nhistorial.unshift(msg.comando);\nif (historial.length > MAX_HIST) historial = historial.slice(0, MAX_HIST);\nglobal.set('telecontrol_historial', historial);\n\nmsg.statusCode = 200;\nmsg.payload = { ok: true, comando: msg.comando };\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -946,7 +997,8 @@
                 "1682dbffcbf076d0",
                 "e61bbce5217e878f"
             ]
-        ]
+        ],
+        "info": "Guarda cada acción de telecontrol manual en `telecontrol_historial` (Contexto Global, tope 500 registros) para trazabilidad y auditoría, y construye la respuesta HTTP de confirmación (ACK) al Frontend."
     },
     {
         "id": "1682dbffcbf076d0",
@@ -975,7 +1027,6 @@
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Preparar Persistencia en motor_ia_chancay",
-        "info": "Traduce `msg.comando` (generado por 'Validar Comando de Telecontrol') al contrato `TelecontrolComandoIn` esperado por `POST /telecontrol/historial` del microservicio `motor_ia_chancay`.",
         "func": "msg.payload = {\n    comando_id: msg.comando.id,\n    nodo_id: msg.comando.nodo_id,\n    actuador: msg.comando.actuador,\n    accion: msg.comando.accion,\n    operador: msg.comando.operador,\n    origen: msg.comando.origen,\n    ts_comando: msg.comando.ts\n};\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
@@ -989,7 +1040,8 @@
             [
                 "fb590be7632b8907"
             ]
-        ]
+        ],
+        "info": "Traduce `msg.comando` (generado por 'Validar Comando de Telecontrol') al contrato `TelecontrolComandoIn` esperado por `POST /telecontrol/historial` del microservicio `motor_ia_chancay`."
     },
     {
         "id": "fb590be7632b8907",
@@ -1027,7 +1079,6 @@
         "type": "function",
         "z": "76385a4aee35babb",
         "name": "Log Resultado Persistencia (no crítico)",
-        "info": "Registra en consola si la persistencia redundante en PostgreSQL tuvo éxito. Un fallo aquí NUNCA debe afectar al operador: el comando MQTT y la bitácora en memoria ya se ejecutaron con éxito.",
         "func": "if (msg.statusCode >= 200 && msg.statusCode < 300) {\n    node.log(`Comando ${msg.payload && msg.payload.comando_id} persistido en motor_ia_chancay.`);\n} else {\n    node.warn('No se pudo persistir el comando de telecontrol en motor_ia_chancay (no crítico).');\n}\nreturn null;\n",
         "outputs": 0,
         "timeout": 0,
@@ -1037,7 +1088,8 @@
         "libs": [],
         "x": 1560,
         "y": 300,
-        "wires": []
+        "wires": [],
+        "info": "Registra en consola si la persistencia redundante en PostgreSQL tuvo éxito. Un fallo aquí NUNCA debe afectar al operador: el comando MQTT y la bitácora en memoria ya se ejecutaron con éxito."
     },
     {
         "id": "9a80bb303bd2cdc7",
@@ -1148,48 +1200,5 @@
         "x": 260,
         "y": 40,
         "wires": []
-    },
-    {
-        "id": "48d13d8c0f62b918",
-        "type": "inject",
-        "z": "f542c6aa8b91ca35",
-        "name": "Inicializar Configuración (al desplegar)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 160,
-        "y": 700,
-        "wires": [
-            [
-                "3cc35c73239b2822"
-            ]
-        ]
-    },
-    {
-        "id": "3cc35c73239b2822",
-        "type": "function",
-        "z": "f542c6aa8b91ca35",
-        "name": "Set MOTOR_IA_BASE_URL en flow context",
-        "func": "flow.set('MOTOR_IA_BASE_URL', 'http://internet-of-thingsfinal-project.railway.internal:8000');\nreturn null;\n",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 460,
-        "y": 700,
-        "wires": [
-            []
-        ]
     }
 ]
