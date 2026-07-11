@@ -190,11 +190,16 @@ async def obtener_telemetria_historico(
         # [CORREGIDO] Python 3.10 no soporta el sufijo 'Z' (Zulu/UTC) en
         # fromisoformat (eso llegó recién en 3.11). El Frontend envía fechas
         # con 'Z' (via .toISOString()), así que lo normalizamos primero.
-        valores.append(datetime.fromisoformat(desde.replace("Z", "+00:00")))
+        # [CORREGIDO 2] La columna timestamp_registro es TIMESTAMP sin zona
+        # horaria (naive). Quitamos el tzinfo después de parsear el 'Z',
+        # porque asyncpg no permite comparar datetime "aware" contra una
+        # columna "naive" (TypeError: can't subtract offset-naive and
+        # offset-aware datetimes).
+        valores.append(datetime.fromisoformat(desde.replace("Z", "+00:00")).replace(tzinfo=None))
         idx += 1
     if hasta:
         condiciones.append(f"timestamp_registro <= ${idx}")
-        valores.append(datetime.fromisoformat(hasta.replace("Z", "+00:00")))
+        valores.append(datetime.fromisoformat(hasta.replace("Z", "+00:00")).replace(tzinfo=None))
         idx += 1
     if nodo_id:
         condiciones.append(f"nodo_id = ${idx}")
