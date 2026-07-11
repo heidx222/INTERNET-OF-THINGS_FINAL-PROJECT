@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
 import json
+import os
 import aiomqtt
 import asyncpg 
 import warnings # <-- NUEVO: Importar la librería de advertencias
@@ -17,19 +18,24 @@ from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
 # Configuraciones de red
-MQTT_BROKER = "broker_chancay_huaral"
-MQTT_PORT = 1883
-MQTT_USER = "backend_central"
-MQTT_PASSWORD = "backendChancay2026"
+# [MODIFICADO] Ahora se leen desde variables de entorno (Railway/producción),
+# con los valores de docker-compose local como fallback si no existen.
+MQTT_BROKER = os.getenv("MQTT_BROKER", "broker_chancay_huaral")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USER = os.getenv("MQTT_USER", "backend_central")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "backendChancay2026")
 MQTT_TOPIC_SUB = "chancay/cuenca/#"  # <-- El comodín (#) hace que escuche histórico y tiempo real
 # [CORREGIDO] Quitado el comodín '#' porque es ilegal para publicar
 MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
 # Configuración de Base de Datos (Mismos datos de la Capa 2)
-DB_USER = "adminChancayHuaral"
-DB_PASS = "adminChancayHuaral123"
-DB_NAME = "chancayhuaral_auth"
-DB_HOST = "db_postgres" 
+# [MODIFICADO] Ahora se leen desde variables de entorno (Railway/producción),
+# con los valores de docker-compose local como fallback si no existen.
+DB_USER = os.getenv("DB_USER", "adminChancayHuaral")
+DB_PASS = os.getenv("DB_PASS", "adminChancayHuaral123")
+DB_NAME = os.getenv("DB_NAME", "chancayhuaral_auth")
+DB_HOST = os.getenv("DB_HOST", "db_postgres")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
 
 engine = MapekEngine()
 app_state = {} 
@@ -118,7 +124,7 @@ async def lifespan(app: FastAPI):
     # Inicializar el pool de conexiones a la BD al arrancar
     print("[DB] Creando pool de conexiones con PostgreSQL...")
     app_state["db_pool"] = await asyncpg.create_pool(
-        user=DB_USER, password=DB_PASS, database=DB_NAME, host=DB_HOST
+        user=DB_USER, password=DB_PASS, database=DB_NAME, host=DB_HOST, port=DB_PORT
     )
     
     # Arrancar el lazo MQTT
