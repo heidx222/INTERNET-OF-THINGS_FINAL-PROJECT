@@ -22,10 +22,10 @@
 // al almacenamiento NVS (Preferences.h) o a un archivo de configuración
 // excluido del control de versiones (.gitignore).
 // ============================================================
-#define WIFI_SSID       "Red_Laboratorio_Chancay"
-#define WIFI_PASS       "Password_Seguro_Lab"
-#define MQTT_SERVER     "192.168.1.X"     
-#define MQTT_PORT       1883
+#define WIFI_SSID       "Galaxy A12DF7E"
+#define WIFI_PASS       "Contrasena"
+#define MQTT_SERVER     "hayabusa.proxy.rlwy.net"     
+#define MQTT_PORT       35329
 #define MQTT_USER       "nodo_chancay_01"
 #define MQTT_PASS       "nodoChancay01" 
 #define MQTT_CLIENT_ID  "ESP32_Cuenca_Chancay_01"
