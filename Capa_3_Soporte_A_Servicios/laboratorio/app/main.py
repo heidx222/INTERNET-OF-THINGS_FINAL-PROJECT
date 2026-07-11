@@ -312,3 +312,36 @@ async def diagnosticar_lectura(data: SensorData):
     es_anomalia, score = engine.analyze_con_score(data)
     return DiagnosticoOut(es_anomalia=es_anomalia, score=score)
 # redeploy-fix-fecha-z
+
+@app.post("/telemetria/historico", status_code=201)
+async def api_guardar_historico(payload: dict):
+    """
+    [NUEVO] Endpoint expuesto para que Node-RED guarde los datos directamente 
+    en PostgreSQL a través de FastAPI, evitando conflictos de certificados SSL.
+    """
+    try:
+        # Extraemos el nodo_id (por defecto usa el autorizado si no viene)
+        nodo_id = payload.get("nodo_id", "nodo_chancay_01")
+        
+        # Validamos y estructuramos los datos usando tu esquema existente SensorData
+        sensor_data = SensorData(
+            nivel_m=float(payload.get("nivel_m", 0.0)),
+            temp_ambiente_c=float(payload.get("temp_ambiente_c", 0.0)),
+            temp_agua_c=float(payload.get("temp_agua_c", 0.0)),
+            tds_ppm=float(payload.get("tds_ppm", 0.0)),
+            ph=float(payload.get("ph", 7.0)),
+            turbidez_ntu=float(payload.get("turbidez_ntu", 0.0))
+        )
+        
+        # Evaluamos el estado de anomalía enviado por Node-RED
+        es_anomalia = payload.get("es_anomalia", False) or payload.get("is_anomaly", False)
+        if isinstance(es_anomalia, str):
+            es_anomalia = es_anomalia.lower() == "true"
+            
+        # Invocamos tu función interna nativa que ya escribe perfecto en Railway
+        await guardar_en_bd(nodo_id, sensor_data, es_anomalia)
+        return {"status": "success", "message": "Datos guardados exitosamente en Railway vía FastAPI"}
+        
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"Error al procesar la inserción: {str(e)}")

@@ -30,9 +30,9 @@
     {
         "id": "b3dfd4a8381733ae",
         "type": "mqtt-broker",
-        "name": "Broker Chancay-Huaral (victorious-exploration.railway.internal:1883)",
-        "broker": "victorious-exploration.railway.internal",
-        "port": "1883",
+        "name": "Broker Chancay-Huaral Telemetría",
+        "broker": "${MQTT_BROKER_HOST}",
+        "port": "${MQTT_BROKER_PORT}",
         "clientid": "nodered_yaku_qhawaq",
         "autoConnect": true,
         "usetls": false,
