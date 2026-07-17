@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Waves, Thermometer, Gauge as GaugeIcon, FlaskConical, ShieldAlert } from "lucide-react";
+import { Waves, Thermometer, Gauge as GaugeIcon, FlaskConical, ShieldAlert, Droplets } from "lucide-react";
 import { useTelemetry } from "../context/TelemetryContext.jsx";
 import Card from "../components/ui/Card.jsx";
 import KpiCard from "../components/ui/KpiCard.jsx";
@@ -73,7 +73,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         <KpiCard
           icon={Waves}
           label="Nivel del Río"
@@ -110,6 +110,13 @@ export default function Dashboard() {
           tone={
             lecturaActual && (lecturaActual.ph < 6.5 || lecturaActual.ph > 8.5) ? "critical" : "river"
           }
+        />
+        <KpiCard
+          icon={Droplets}
+          label="Turbidez"
+          value={lecturaActual?.turbidez_ntu?.toFixed(1) ?? "—"}
+          unit="NTU"
+          tone="warning"
         />
       </div>
 
@@ -158,12 +165,13 @@ export default function Dashboard() {
             ]}
           />
         </Card>
-        <Card title="pH y TDS" subtitle="Serie temporal en vivo">
+        <Card title="Calidad del Agua (pH, TDS, Turbidez)" subtitle="Serie temporal en vivo">
           <TimeSeriesChart
             data={serieCombinada}
             lines={[
               { dataKey: "ph", name: "pH", color: "#0F5273" },
               { dataKey: "tds_ppm", name: "TDS (ppm)", color: "#F0A93E" },
+              { dataKey: "turbidez_ntu", name: "Turbidez (NTU)", color: "#7A9B76" },
             ]}
           />
         </Card>
