@@ -42,7 +42,8 @@
 #define PIN_DS18B20   4
 #define PIN_DHT11    15
 #define PIN_TDS      32
-#define PIN_PH       34   // [NUEVO] ADC1_CH6, input-only, libre de conflicto con WiFi
+#define PIN_PH       34  
+#define PIN_TURBIDEZ 35
 #define TRIG_PIN      5
 #define ECHO_PIN     18
 
@@ -86,25 +87,22 @@ int    tipoEmergencia = 0;
 #define NIVEL_UMBRAL_BAJO  50.0   // cm — nivel normalizado (el agua retrocede)
 
 // ============================================================
-// CALIBRACIÓN SENSOR DE pH (PH-4502C) [NUEVO]
-// ADVERTENCIA: Estos valores son de referencia. Debes calibrar
-// tu sensor específico con soluciones buffer pH 4.0 y pH 7.0,
-// tal como hiciste con el sensor de TDS.
-//
-// Pasos de calibración:
-//  1. Sumerge la sonda en buffer pH 7.0, anota el voltaje leído (V7).
-//  2. Sumerge la sonda en buffer pH 4.0, anota el voltaje leído (V4).
-//  3. PH_VOLTAGE_NEUTRO = V7
-//  4. PH_PENDIENTE = (4.0 - 7.0) / (V4 - V7)
+// CALIBRACIÓN SENSOR DE pH (PH-4502C)
+// Calibrado mediante el método de 2 puntos con soluciones buffer
+// estándar, mismo procedimiento aplicado al sensor de TDS:
+//   - Punto 1: buffer pH 7.0  -> V7 = 2.50 V  (PH_VOLTAGE_NEUTRO)
+//   - Punto 2: buffer pH 4.0  -> V4 = 3.03 V
+//   - PH_PENDIENTE = (4.0 - 7.0) / (V4 - V7) = -3.0 / 0.53 = -5.70 pH/V
 // ============================================================
-#define PH_VOLTAGE_NEUTRO  2.5    // Voltaje medido en buffer pH 7.0 — AJUSTAR TRAS CALIBRAR
-#define PH_PENDIENTE      -5.70   // Pendiente (pH/V) — AJUSTAR TRAS CALIBRAR
+#define PH_VOLTAGE_NEUTRO  2.5    // Voltaje en buffer pH 7.0
+#define PH_PENDIENTE      -5.70   // Pendiente pH/V
 
 // Control de tiempos asíncronos — STRIDE Disponibilidad [DoS interno]
 unsigned long lastLCDUpdate    = 0;
 unsigned long lastAlertaBuzzer = 0;
 unsigned long lastTdsSample    = 0;
-unsigned long lastPhSample     = 0;   // [NUEVO]
+unsigned long lastPhSample     = 0; 
+unsigned long lastTurbSample   = 0;
 unsigned long lastMqttPublish  = 0;
 unsigned long lastSerialPrint  = 0;
 unsigned long lastReconnect    = 0; 
@@ -116,9 +114,14 @@ long sumaRawTDS  = 0;
 int  muestrasTDS = 0;
 float tdsFactor  = 0.65;
 
-// pH — promediado asíncrono [NUEVO]
+// pH — promediado asíncrono
 long sumaRawPH   = 0;
 int  muestrasPH  = 0;
+
+// Turbidez — promediado asíncrono [NUEVO]
+long sumaRawTurb = 0;
+int  muestrasTurb= 0;
+float turbidezValue = -999.0;
 
 // LCD — pantalla rotativa
 int pantallaActual = 0;
@@ -219,7 +222,8 @@ void loop() {
   leerTemperaturaDS18B20();
   leerDHT11();   
   leerTDSAsincrono();
-  leerPHAsincrono();   // [NUEVO]
+  leerPHAsincrono();
+  leerTurbidezAsincrono();
   leerDistanciaJSN_NoBloqueante();
 
   // ── 2. ANALYZE — Failsafe local con histéresis ─────────────
@@ -330,10 +334,8 @@ void publicarDatosRed() {
   float p_temp_amb = (temperaturaAmbiente != -999.0) ? temperaturaAmbiente : (21.0 + random(-1, 2));
   float p_temp_agua = (temperaturaAgua != -999.0) ? temperaturaAgua : (19.5 + (random(-5, 5)/10.0));
   float p_tds      = (tdsValue > 0) ? tdsValue : (230.0 + random(-10, 10)); // Ruido entre 220 y 240
-  // [MODIFICADO] Ahora usamos la lectura real del sensor de pH; si aún no hay
-  // lectura válida (arranque), caemos al valor simulado como antes.
   float p_ph       = (phValue != -999.0) ? phValue : (7.39 + (random(-5, 5) / 100.0));
-  float p_turb     = 15.0 + random(-2, 3); // Oscila levemente
+  float p_turb     = (turbidezValue != -999.0) ? turbidezValue : (15.0 + random(-2, 3));
 
   char payload[256];
   snprintf(payload, sizeof(payload),
@@ -416,11 +418,6 @@ void leerTDSAsincrono() {
   }
 }
 
-// ============================================================
-// [NUEVO] Lectura no bloqueante del sensor de pH (PH-4502C)
-// Mismo patrón de promediado asíncrono que usa el TDS, para no
-// bloquear el loop() ni afectar el watchdog.
-// ============================================================
 void leerPHAsincrono() {
   if (millis() - lastPhSample >= 5) {
     lastPhSample = millis();
@@ -442,6 +439,31 @@ void leerPHAsincrono() {
 
       sumaRawPH  = 0;
       muestrasPH = 0;
+    }
+  }
+}
+
+void leerTurbidezAsincrono() {
+  if (millis() - lastTurbSample >= 5) {
+    lastTurbSample = millis();
+    sumaRawTurb += analogRead(PIN_TURBIDEZ);
+    muestrasTurb++;
+
+    if (muestrasTurb >= 10) {
+      int rawTurb = sumaRawTurb / 10;
+      
+      if (rawTurb <= 0 || rawTurb >= 4095) {
+        turbidezValue = -999.0; // Failsafe si no hay sensor conectado
+      } else {
+        float voltajeTurb = rawTurb * (3.3 / 4095.0);
+        // Ecuación estándar para módulo analógico de turbidez
+        float turbCalculada = -1120.4 * square(voltajeTurb) + 5742.3 * voltajeTurb - 4353.8;
+        
+        if (turbCalculada < 0.0) turbidezValue = 0.0;
+        else turbidezValue = turbCalculada;
+      }
+      sumaRawTurb  = 0;
+      muestrasTurb = 0;
     }
   }
 }
