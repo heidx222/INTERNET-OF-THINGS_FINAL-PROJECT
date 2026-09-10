@@ -71,7 +71,7 @@ services:
       - ../../Capa_4_Aplicacion/laboratorio/nodered-data:/data
     environment:
       - TZ=America/Lima
-      - AI_API_KEY=AQ.Ab8RN6Knm7IFz7SzdIZMRJJGmXKJNvmKIEd0kG1RHdloYXv0GQ
+      - AI_API_KEY=aaa123
       - WA_INSTANCE=123456                      # <--- Tu Id de Instancia de Green-API
       - WA_TOKEN=abcdef1234567890yourtoken2026   # <--- Tu Token Secreto de Green-API
       - WA_RECIPIENT=519998887777@c.us            # <--- Número que recibirá las alertas
