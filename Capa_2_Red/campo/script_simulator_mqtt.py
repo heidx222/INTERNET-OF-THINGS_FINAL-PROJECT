@@ -15,8 +15,8 @@ import paho.mqtt.client as mqtt
 load_dotenv()
 
 # --- CONFIGURACIÓN DE RED Y RAILWAY ---
-MQTT_SERVER = os.getenv("MQTT_HOST", "hayabusa.proxy.rlwy.net")
-MQTT_PORT = int(os.getenv("MQTT_PORT", 35329))
+MQTT_SERVER = os.getenv("MQTT_HOST", "iriguchi.proxy.rlwy.net")
+MQTT_PORT = int(os.getenv("MQTT_PORT", 28182))
 MQTT_USER = os.getenv("MQTT_USER", "simulador_python")
 MQTT_PASS = os.getenv("MQTT_PASS", "simulador123")
 
