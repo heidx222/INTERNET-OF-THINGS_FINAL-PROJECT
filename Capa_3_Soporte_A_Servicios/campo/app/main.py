@@ -25,8 +25,11 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/#")
 MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
-# Configuración Base de Datos PostgreSQL (Soporta DATABASE_URL de Railway)
+# Configuración Base de Datos PostgreSQL (Asegura formato para asyncpg)
 DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 DB_USER = os.getenv("DB_USER", "adminChancayHuaral")
 DB_PASS = os.getenv("DB_PASS", "adminChancayHuaral123")
 DB_NAME = os.getenv("DB_NAME", "chancayhuaral_auth")
@@ -40,29 +43,32 @@ async def guardar_en_bd(data: SensorData, es_anomalia: bool, estado_mapek: int):
     """Guarda la lectura en PostgreSQL (Fase Knowledge del lazo MAPE-K)"""
     pool = app_state.get("db_pool")
     if not pool:
-        print("[DB-ERROR] Pool de conexiones no disponible.")
+        print("[DB-ERROR] Imposible guardar: Pool de conexiones a la BD no disponible.")
         return
 
-    async with pool.acquire() as connection:
-        query = """
-            INSERT INTO telemetria_cuenca 
-            (node_id, origen, timestamp_ms, nivel_m, temp_ambiente_c, temp_agua_c, tds_ppm, ph, turbidez_ntu, alerta, estado_mapek)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
-        """
-        await connection.execute(
-            query, 
-            data.node_id, 
-            data.origen, 
-            data.timestamp_ms, 
-            data.nivel_m, 
-            data.temp_ambiente_c, 
-            data.temp_agua_c, 
-            data.tds_ppm, 
-            data.ph, 
-            data.turbidez_ntu, 
-            es_anomalia, 
-            estado_mapek
-        )
+    try:
+        async with pool.acquire() as connection:
+            query = """
+                INSERT INTO telemetria_cuenca 
+                (node_id, origen, timestamp_ms, nivel_m, temp_ambiente_c, temp_agua_c, tds_ppm, ph, turbidez_ntu, alerta, estado_mapek)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+            """
+            await connection.execute(
+                query, 
+                data.node_id, 
+                data.origen, 
+                data.timestamp_ms, 
+                data.nivel_m, 
+                data.temp_ambiente_c, 
+                data.temp_agua_c, 
+                data.tds_ppm, 
+                data.ph, 
+                data.turbidez_ntu, 
+                es_anomalia, 
+                estado_mapek
+            )
+    except Exception as e:
+        print(f"[DB-ERROR] Error al insertar en PostgreSQL: {e}")
 
 async def mqtt_listener():
     """Fase MONITOR del lazo autonomico MAPE-K"""
@@ -118,7 +124,7 @@ async def mqtt_listener():
                         print(f"[CRITICAL ERROR] Fallo en lazo MAPE-K: {e}")
                         
         except aiomqtt.MqttError as error:
-            print(f"[NETWORK-WARN] Conexión perdidacon Mosquitto. Reintentando en 5s...")
+            print(f"[NETWORK-WARN] Conexión perdida con Mosquitto ({error}). Reintentando en 5s...")
             await asyncio.sleep(5)
 
 @asynccontextmanager
@@ -133,7 +139,7 @@ async def lifespan(app: FastAPI):
             )
         print("[DB] Pool de PostgreSQL conectado correctamente.")
     except Exception as e:
-        print(f"[DB-WARN] No se pudo conectar a PostgreSQL localmente: {e}")
+        print(f"[DB-WARN] No se pudo conectar a PostgreSQL: {e}")
         app_state["db_pool"] = None
     
     task = asyncio.create_task(mqtt_listener())
@@ -160,6 +166,9 @@ def root():
 @app.get("/telemetria/reciente")
 async def obtener_telemetria(limit: int = 20):
     pool = app_state.get("db_pool")
+    if not pool:
+        raise HTTPException(status_code=503, detail="Base de datos no disponible")
+        
     async with pool.acquire() as connection:
         rows = await connection.fetch(
             "SELECT * FROM telemetria_cuenca ORDER BY created_at DESC LIMIT $1;", limit
