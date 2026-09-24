@@ -160,7 +160,7 @@ async def mqtt_listener():
                             payload_ws = alerta.model_dump()
                             payload_ws["node_id"] = sensor_data.node_id
                             payload_ws["timestamp"] = datetime.now().isoformat()
-                            await manager.broadcast(payload_ws)
+                            await manager_alertas.broadcast(payload_ws)
                             
                     except ValidationError as e:
                         print(f"[SECURITY] Payload incompatible rechazado: {e}")
