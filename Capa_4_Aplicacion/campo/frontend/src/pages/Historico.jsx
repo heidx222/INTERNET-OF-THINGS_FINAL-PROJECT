@@ -20,6 +20,25 @@ const hace7diasIso = () => format(subDays(new Date(), 7), "yyyy-MM-dd'T'HH:mm");
  * proxy `GET /api/telemetria/historico` de Node-RED → `motor_ia_chancay`),
  * visualizar tendencias y calcular el % de salud hídrica del periodo.
  */
+/**
+ * Función auxiliar para formatear fechas de manera 100% segura.
+ */
+function formatearFechaSegura(rawFecha) {
+  if (!rawFecha) return "—";
+  const d = new Date(rawFecha);
+  if (isNaN(d.getTime())) return "—";
+  return format(d, "dd/MM/yyyy HH:mm:ss");
+}
+
+/**
+ * Función auxiliar para formatear números de manera segura.
+ */
+function formatearNumero(valor, decimales = 2) {
+  const num = Number(valor);
+  if (isNaN(num) || valor === null || valor === undefined) return "0.00";
+  return num.toFixed(decimales);
+}
+
 export default function Historico() {
   const [nodoId, setNodoId] = useState(NODO_POR_DEFECTO);
   const [desde, setDesde] = useState(hace7diasIso());
@@ -38,13 +57,26 @@ export default function Historico() {
         limit: 1000,
       });
       const normalizado = (Array.isArray(resp) ? resp : [])
-        .map((r) => ({
-          ...r,
-          ts: new Date(r.timestamp_registro).getTime(),
-        }))
+        .map((r) => {
+          const rawTime = r.ts || r.timestamp_registro || r.timestamp || r.created_at;
+          const parsedTime = rawTime ? new Date(rawTime).getTime() : Date.now();
+
+          return {
+            ...r,
+            ts: isNaN(parsedTime) ? Date.now() : parsedTime,
+            nivel_m: Number(r.nivel_m ?? r.nivel) || 0,
+            temp_agua_c: Number(r.temp_agua_c ?? r.temp_agua) || 0,
+            tds_ppm: Number(r.tds_ppm ?? r.tds) || 0,
+            ph: Number(r.ph) || 0,
+            turbidez_ntu: Number(r.turbidez_ntu ?? r.turbidez) || 0,
+            es_anomalia: Boolean(r.es_anomalia || r.anomalia),
+          };
+        })
         .sort((a, b) => a.ts - b.ts);
+
       setDatos(normalizado);
     } catch (e) {
+      console.error("Error al consultar histórico:", e);
       setDatos([]);
     } finally {
       setCargando(false);
@@ -53,17 +85,20 @@ export default function Historico() {
   }, [desde, hasta, nodoId]);
 
   const stats = useMemo(() => {
-    if (datos.length === 0) return null;
+    if (!datos || datos.length === 0) return null;
 
+    const total = datos.length;
     const anomalias = datos.filter((d) => d.es_anomalia).length;
-    const pctAnomalias = ((anomalias / datos.length) * 100).toFixed(1);
+    const pctAnomalias = ((anomalias / total) * 100).toFixed(1);
     const saludHidricaPct = Math.max(0, 100 - Number(pctAnomalias) * 2).toFixed(1);
 
-    const promedio = (campo) =>
-      (datos.reduce((acc, d) => acc + (Number(d[campo]) || 0), 0) / datos.length).toFixed(2);
+    const promedio = (campo) => {
+      const suma = datos.reduce((acc, d) => acc + (Number(d[campo]) || 0), 0);
+      return (suma / total).toFixed(2);
+    };
 
     return {
-      totalRegistros: datos.length,
+      totalRegistros: total,
       anomalias,
       pctAnomalias,
       saludHidricaPct,
@@ -226,14 +261,14 @@ export default function Historico() {
                 .map((d, i) => (
                   <tr key={i} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
                     <td className="py-2 pr-4 text-slate_tech-600 whitespace-nowrap">
-                      {format(new Date(d.ts), "dd/MM/yyyy HH:mm:ss")}
+                      {formatearFechaSegura(d.timestamp_registro || d.ts)}
                     </td>
-                    <td className="py-2 pr-4 font-mono text-xs">{d.nodo_id}</td>
-                    <td className="py-2 pr-4">{Number(d.nivel_m).toFixed(2)}</td>
-                    <td className="py-2 pr-4">{Number(d.temp_agua_c).toFixed(1)}</td>
-                    <td className="py-2 pr-4">{Number(d.tds_ppm).toFixed(0)}</td>
-                    <td className="py-2 pr-4">{Number(d.ph).toFixed(2)}</td>
-                    <td className="py-2 pr-4">{Number(d.turbidez_ntu).toFixed(1)}</td>
+                    <td className="py-2 pr-4 font-mono text-xs">{d.nodo_id || nodoId}</td>
+                    <td className="py-2 pr-4">{formatearNumero(d.nivel_m, 2)}</td>
+                    <td className="py-2 pr-4">{formatearNumero(d.temp_agua_c, 1)}</td>
+                    <td className="py-2 pr-4">{formatearNumero(d.tds_ppm, 0)}</td>
+                    <td className="py-2 pr-4">{formatearNumero(d.ph, 2)}</td>
+                    <td className="py-2 pr-4">{formatearNumero(d.turbidez_ntu, 1)}</td>
                     <td className="py-2 pr-4">
                       {d.es_anomalia ? (
                         <span className="text-critical font-semibold">Anomalía</span>
