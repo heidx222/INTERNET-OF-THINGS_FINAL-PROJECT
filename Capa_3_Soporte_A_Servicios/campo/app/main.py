@@ -65,7 +65,8 @@ class ConnectionManager:
             except Exception as e:
                 print(f"[WEBSOCKET-ERROR] Fallo al enviar a cliente: {e}")
 
-manager = ConnectionManager()
+manager_alertas = ConnectionManager()
+manager_telemetria = ConnectionManager()
 
 # ==========================================
 # PERSISTENCIA Y MONITOR MAPE-K
@@ -132,7 +133,14 @@ async def mqtt_listener():
                         # 3. KNOWLEDGE
                         await guardar_en_bd(sensor_data, requiere_alerta, estado_mapek)
                         
-                        # 4. PLAN & EXECUTE
+                        # 4. BROADCAST TELEMETRÍA EN TIEMPO REAL (NUEVO)
+                        # Envía TODOS los paquetes de sensores al canal /ws/telemetria
+                        payload_telemetria = sensor_data.model_dump()
+                        payload_telemetria["es_anomalia"] = es_anomalia_ia
+                        payload_telemetria["estado_mapek"] = estado_mapek
+                        await manager_telemetria.broadcast(payload_telemetria)
+
+                        # 5. PLAN & EXECUTE (alertas)
                         if requiere_alerta:
                             print(f"[ALERTA MAPE-K] Anomalía detectada en {sensor_data.node_id} | Estado: {estado_mapek}")
                             alerta = AlertaOut(
@@ -201,20 +209,31 @@ app.add_middleware(
 )
 
 # ==========================================
-# ENDPOINT WEBSOCKET (SOLUCIONA EL ERROR 404)
+# ENDPOINT WEBSOCKET 
 # ==========================================
+# Canal WebSocket para Alertas Críticas
 @app.websocket("/ws/alertas")
 async def websocket_alertas_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await manager_alertas.connect(websocket)
     try:
         while True:
-            # Mantiene viva la conexión escuchando pings/mensajes del cliente
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager_alertas.disconnect(websocket)
     except Exception as e:
-        print(f"[WEBSOCKET-ERROR] Error en conexión: {e}")
-        manager.disconnect(websocket)
+        manager_alertas.disconnect(websocket)
+
+# Canal WebSocket para Telemetría en Vivo (Nivel, pH, Turbidez, etc.)
+@app.websocket("/ws/telemetria")
+async def websocket_telemetria_endpoint(websocket: WebSocket):
+    await manager_telemetria.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager_telemetria.disconnect(websocket)
+    except Exception as e:
+        manager_telemetria.disconnect(websocket)
 
 # ==========================================
 # ENDPOINTS REST HTTP
