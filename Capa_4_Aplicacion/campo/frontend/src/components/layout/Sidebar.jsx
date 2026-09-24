@@ -1,41 +1,46 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, BellRing, History, SlidersHorizontal, Map as MapIcon,
-  Droplets, Circle, Radio, ChevronLeft, ChevronRight, ShieldCheck, Activity, } from "lucide-react";
+import {
+  LayoutDashboard,
+  BellRing,
+  History,
+  SlidersHorizontal,
+  Map as MapIcon,
+  Droplets,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  Activity,
+} from "lucide-react";
 import { useTelemetry } from "../../context/TelemetryContext.jsx";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/notificaciones", label: "Notificaciones", icon: BellRing },
+  { to: "/notificaciones", label: "Notificaciones", icon: BellRing, badgeKey: "alertas" },
   { to: "/historico", label: "Estadísticas Históricas", icon: History },
   { to: "/telecontrol", label: "Telecontrol", icon: SlidersHorizontal },
   { to: "/mapa", label: "Mapa GIS", icon: MapIcon },
 ];
 
-/**
- * Barra lateral de navegación principal. En móvil se colapsa fuera del
- * viewport y se controla mediante `isOpen`/`onClose` (ver Layout.jsx).
- */
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
-  const { wsTelemetriaConectado, wsAlertasConectado, telemetria } = useTelemetry();
+  const { wsTelemetriaConectado, wsAlertasConectado, telemetria, alertas = [] } = useTelemetry();
 
+  // Alertas no atendidas para la badget
+  const alertasNoAtendidas = useMemo(() => {
+    return Array.isArray(alertas) ? alertas.filter((a) => !a.atendida).length : 0;
+  }, [alertas]);
+
+  // EVALUACIÓN DINÁMICA DE LAS 4 CAPAS
   const capasEstado = useMemo(() => {
-    // 1. Capa 1: Detecta si los sensores de campo transmiten datos recientes (últimos 30s)
     const ultimaLectura = Array.isArray(telemetria) && telemetria.length > 0 ? telemetria[0] : null;
     const tsUltimo = ultimaLectura?.timestamp_registro || ultimaLectura?.ts;
     const haceCuanto = tsUltimo ? Date.now() - new Date(tsUltimo).getTime() : Infinity;
-    
+
     // Si llegó una lectura en los últimos 30 segundos, Capa 1 está transmitiendo
     const capa1Online = haceCuanto < 30000;
-
-    // 2. Capa 2: Conexión WebSocket de Node-RED (Transporte/Gateway)
-    const capa2Online = wsTelemetriaConectado;
-
-    // 3. Capa 3: Conexión al Motor IA (FastAPI / PostgreSQL)
-    const capa3Online = wsAlertasConectado;
-
-    // 4. Capa 4: Cliente React / Red Local
+    const capa2Online = Boolean(wsTelemetriaConectado);
+    const capa3Online = Boolean(wsAlertasConectado);
     const capa4Online = typeof navigator !== "undefined" ? navigator.onLine : true;
 
     return {
@@ -137,7 +142,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
           ))}
         </nav>
 
-        {/* Card de Estado de Telemetría (SCADA Status) */}
+        {/* Card de Estado por Capas */}
         {(!collapsed || isOpen) ? (
           <div className="m-3 p-3.5 rounded-xl bg-slate_tech-950/60 border border-slate_tech-800/80 text-xs space-y-2.5">
             <div className="flex items-center justify-between">
@@ -171,7 +176,6 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
             </div>
           </div>
         ) : (
-          /* Vista Minimizada cuando el Sidebar está colapsado */
           <div className="p-3 flex flex-col items-center gap-2 border-t border-slate_tech-800">
             {Object.entries(capasEstado).map(([key, capa]) => (
               <span

@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { Menu, Bell, Clock, ShieldAlert, Cpu, CheckCircle } from "lucide-react";
+import { Menu, Bell, Clock } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useTelemetry } from "../../context/TelemetryContext.jsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 const TITULOS = {
-  "/": "Dashboard Central",
-  "/notificaciones": "Notificaciones en Tiempo Real",
-  "/historico": "Estadísticas Históricas",
-  "/telecontrol": "Panel de Telecontrol",
-  "/mapa": "Mapa Geográfico (GIS)",
+  "/": { titulo: "Dashboard Central", sub: "Monitoreo de Parámetros Hidrológicos" },
+  "/notificaciones": { titulo: "Notificaciones en Tiempo Real", sub: "Centro de Alertas y Eventos" },
+  "/historico": { titulo: "Estadísticas Históricas", sub: "Análisis y Tendencias Temporal" },
+  "/telecontrol": { titulo: "Panel de Telecontrol", sub: "Gestión de Actuadores y Válvulas" },
+  "/mapa": { titulo: "Mapa Geográfico (GIS)", sub: "Ubicación Espacial de Estaciones" },
 };
 
 export default function Topbar({ onOpenSidebar }) {
   const location = useLocation();
-  const { alertas = [], wsTelemetriaConectado } = useTelemetry();
+  const { alertas = [] } = useTelemetry();
   const [fechaHora, setFechaHora] = useState(new Date());
 
-  // Reloj industrial en tiempo real
+  // Reloj industrial
   useEffect(() => {
     const timer = setInterval(() => setFechaHora(new Date()), 1000);
     return () => clearInterval(timer);
@@ -55,7 +55,7 @@ export default function Topbar({ onOpenSidebar }) {
           <span>{format(fechaHora, "dd MMM yyyy · HH:mm:ss", { locale: es })}</span>
         </div>
 
-        {/* Botón / Icono de Notificaciones con Badge de Impacto */}
+        {/* Botón de Notificaciones */}
         <Link
           to="/notificaciones"
           className="relative p-2 rounded-xl border border-slate_tech-200 hover:bg-slate_tech-100 transition-colors text-slate_tech-700"
