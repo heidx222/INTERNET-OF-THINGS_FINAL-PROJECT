@@ -33,16 +33,37 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
 
   // EVALUACIÓN DINÁMICA DE LAS 4 CAPAS
   const capasEstado = useMemo(() => {
-    const ultimaLectura = Array.isArray(telemetria) && telemetria.length > 0 ? telemetria[0] : null;
-    const tsUltimo = ultimaLectura?.timestamp_registro || ultimaLectura?.ts;
-    const haceCuanto = tsUltimo ? Date.now() - new Date(tsUltimo).getTime() : Infinity;
+    let ultimaLectura = null;
 
-    // Si llegó una lectura en los últimos 30 segundos, Capa 1 está transmitiendo
-    const capa1Online = haceCuanto < 30000;
+    if (Array.isArray(telemetria) && telemetria.length > 0) {
+      // Tomamos el último elemento si vienen apilados, o el primero
+      ultimaLectura = telemetria[telemetria.length - 1];
+    } else if (telemetria && typeof telemetria === "object") {
+      ultimaLectura = telemetria;
+    }
+
+    // Acepta múltiples nombres de propiedad para la marca de tiempo
+    const tsUltimo = 
+      ultimaLectura?.timestamp || 
+      ultimaLectura?.timestamp_registro || 
+      ultimaLectura?.ts || 
+      ultimaLectura?.created_at;
+
+    let haceCuanto = Infinity;
+    if (tsUltimo) {
+      const fechaMs = new Date(tsUltimo).getTime();
+      if (!isNaN(fechaMs)) {
+        haceCuanto = Date.now() - fechaMs;
+      }
+    }
+
+    // Si llegó una lectura en los últimos 45 segundos, Capa 1 está transmitiendo
+    // O si no hay timestamp válido pero hay lecturas llegando en vivo por WS
+    const capa1Online = haceCuanto < 45000 || (Boolean(wsTelemetriaConectado) && Boolean(ultimaLectura));
     const capa2Online = Boolean(wsTelemetriaConectado);
     const capa3Online = Boolean(wsAlertasConectado);
     const capa4Online = typeof navigator !== "undefined" ? navigator.onLine : true;
-
+    
     return {
       capa1: { label: "C1: Campo", online: capa1Online, sub: capa1Online ? "Transmitiendo" : "Sin Lectura" },
       capa2: { label: "C2: Gateway (Node-RED)", online: capa2Online, sub: capa2Online ? "WS Conectado" : "Desconectado" },

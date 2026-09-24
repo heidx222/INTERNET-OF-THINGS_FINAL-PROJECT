@@ -247,6 +247,14 @@ async def websocket_telemetria_endpoint(websocket: WebSocket):
 def root():
     return {"proyecto": "Yaku Qhawaq", "capa": "3 - Soporte a Servicios", "status": "online"}
 
+def serializar_fila_bd(row: dict) -> dict:
+    """Función auxiliar para convertir tipos no serializables (datetime) a texto ISO"""
+    item = dict(row)
+    for clave, valor in item.items():
+        if isinstance(valor, datetime):
+            item[clave] = valor.isoformat()
+    return item
+
 @app.get("/telemetria/reciente")
 async def obtener_telemetria(limit: int = 20):
     pool = app_state.get("db_pool")
@@ -257,7 +265,7 @@ async def obtener_telemetria(limit: int = 20):
         rows = await connection.fetch(
             "SELECT * FROM telemetria_cuenca ORDER BY created_at DESC LIMIT $1;", limit
         )
-        return [dict(row) for row in rows]
+        return [serializar_fila_bd(row) for row in rows]
 
 @app.get("/telemetria/historico")
 async def obtener_telemetria_historico(
@@ -299,12 +307,12 @@ async def obtener_telemetria_historico(
 
     async with pool.acquire() as connection:
         rows = await connection.fetch(query, *valores)
-        return [dict(row) for row in rows]
+        return [serializar_fila_bd(row) for row in rows]
 
 @app.post("/diagnostico", response_model=DiagnosticoOut)
 async def diagnosticar_lectura(data: SensorData):
     es_anomalia, score = engine.analyze_con_score(data)
-    return DiagnosticoOut(es_anomalia=es_anomalia, score=score)
+    return DiagnosticoOut(es_anomalia=bool(es_anomalia), score=float(score))
 
 @app.post("/telemetria/historico", status_code=201)
 async def api_guardar_historico(payload: dict):
@@ -334,8 +342,18 @@ async def obtener_estado_nodos():
         is_online = False
         diferencia_seg = None
 
+    estado_str = "ONLINE" if is_online else "OFFLINE"
+
     return {
         "node_id": "nodo_chancay_01",
-        "status": "ONLINE" if is_online else "OFFLINE",
-        "segundos_desde_ultimo_envio": int(diferencia_seg) if diferencia_seg else "N/A"
+        "status": estado_str,
+        "is_online": is_online,
+        "last_seen": ultimo_registro.isoformat() if ultimo_registro else None,
+        "segundos_desde_ultimo_envio": int(diferencia_seg) if diferencia_seg is not None else None,
+        "nodos": {
+            "nodo_chancay_01": {
+                "status": estado_str,
+                "is_online": is_online
+            }
+        }
     }
