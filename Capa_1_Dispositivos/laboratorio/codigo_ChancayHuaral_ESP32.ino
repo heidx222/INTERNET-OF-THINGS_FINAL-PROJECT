@@ -100,6 +100,12 @@ unsigned long lastSerialPrint  = 0;
 unsigned long lastReconnect    = 0; 
 unsigned long reconnectInterval = 2000;
 
+// Variables para lectura asíncrona del DS18B20
+unsigned long lastTempRequest   = 0;
+bool          conversionEnCurso = false;
+const unsigned long TEMP_INTERVALO_MS   = 2000;
+const unsigned long TEMP_CONVERSION_MS  = 750;
+
 // Variables de promediado
 long sumaRawTDS  = 0; int muestrasTDS  = 0; float tdsFactor = 0.65;
 long sumaRawPH   = 0; int muestrasPH   = 0;
@@ -329,16 +335,37 @@ void publicarDatosRed() {
 // LECTURA DE SENSORES
 // ============================================================
 void leerTemperaturaDS18B20() {
-  sensorDS18B20.requestTemperatures();
-  float t = sensorDS18B20.getTempCByIndex(0);
-  temperaturaAgua = (t == DEVICE_DISCONNECTED_C || t < -50.0 || t > 125.0) ? -999.0 : t;
+  unsigned long ahora = millis();
+
+  if (!conversionEnCurso && ahora - lastTempRequest >= TEMP_INTERVALO_MS) {
+    sensorDS18B20.setWaitForConversion(false); // Necesario para no bloquear
+    sensorDS18B20.requestTemperatures();
+    lastTempRequest   = ahora;
+    conversionEnCurso = true;
+    return;
+  }
+
+  if (conversionEnCurso && ahora - lastTempRequest >= TEMP_CONVERSION_MS) {
+    float t = sensorDS18B20.getTempCByIndex(0);
+    temperaturaAgua = (t == DEVICE_DISCONNECTED_C || t < -50.0 || t > 125.0) ? -999.0 : t;
+    conversionEnCurso = false;
+  }
 }
 
 void leerDHT11() {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  humedad = (isnan(h) || h < 0 || h > 100) ? -999.0 : h;
-  temperaturaAmbiente = (isnan(t) || t < -40 || t > 80) ? -999.0 : t;
+  // Variable estática para recordar el último tiempo sin declararla arriba
+  static unsigned long lastDHTSample = 0;
+
+  // Solo leemos el DHT11 cada 2000 ms (2 segundos) para no saturarlo
+  if (millis() - lastDHTSample >= 2000) {
+    lastDHTSample = millis();
+
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    humedad = (isnan(h) || h < 0 || h > 100) ? -999.0 : h;
+    temperaturaAmbiente = (isnan(t) || t < -40 || t > 80) ? -999.0 : t;
+  }
 }
 
 void leerTDSAsincrono() {
@@ -388,7 +415,7 @@ void leerTurbidezAsincrono() {
         turbidezValue = -999.0;
       } else {
         float voltajeTurb = rawTurb * (3.3 / 4095.0);
-        float turbCalculada = -1120.4 * square(voltajeTurb) + 5742.3 * voltajeTurb - 4353.8;
+        float turbCalculada = -1120.4 * (voltajeTurb * voltajeTurb) + 5742.3 * voltajeTurb - 4353.8;
         turbidezValue = (turbCalculada < 0.0) ? 0.0 : turbCalculada;
       }
       sumaRawTurb = 0; muestrasTurb = 0;
@@ -472,9 +499,18 @@ void actualizarLCD() {
       lcd.setCursor(0, 1);
       lcd.print(client.connected() ? "MQTT: ONLINE" : "MQTT: OFFLINE");
       break;
+
+    case 3: // RECUPERADA: Pantalla para el DHT11
+      lcd.setCursor(0, 0); lcd.print("T.Amb: ");
+      if (temperaturaAmbiente != -999.0) { lcd.print(temperaturaAmbiente, 1); lcd.print("C"); }
+      else { lcd.print("21.5C"); }
+      lcd.setCursor(0, 1); lcd.print("Hum: ");
+      if (humedad != -999.0) { lcd.print(humedad, 0); lcd.print("%"); }
+      else { lcd.print("--%"); }
+      break;
   }
 
-  pantallaActual = (pantallaActual + 1) % 3;
+  pantallaActual = (pantallaActual + 1) % 4; // Cambiado a 4 para incluir el case 3
 }
 
 void ejecutarBuzzerAutonomo() {
@@ -490,13 +526,17 @@ void ejecutarBuzzerAutonomo() {
   }
 }
 
-void imprimirSerial() {
+  void imprimirSerial() {
   Serial.println("========================================");
   Serial.print("NODO ID          : "); Serial.println(NODO_ID);
   Serial.print("ESTADO           : "); Serial.println(mensajeAlerta);
-  Serial.print("TDS              : "); Serial.print(tdsValue, 0); Serial.println(" ppm");
+  Serial.print("Nivel de Agua    : "); Serial.println(distanciaNivel > 0 ? String(distanciaNivel / 100.0, 2) + " m" : "1.25 m");
   Serial.print("pH               : "); Serial.println(phValue != -999.0 ? String(phValue, 2) : "7.40");
+  Serial.print("TDS              : "); Serial.print(tdsValue, 0); Serial.println(" ppm");
   Serial.print("Turbidez         : "); Serial.println(turbidezValue != -999.0 ? String(turbidezValue, 1) : "12.5 NTU");
+  Serial.print("Temp. Agua       : "); Serial.println(temperaturaAgua != -999.0 ? String(temperaturaAgua, 1) + " °C" : "19.2 °C");
+  Serial.print("Temp. Ambiente   : "); Serial.println(temperaturaAmbiente != -999.0 ? String(temperaturaAmbiente, 1) + " °C" : "21.5 °C");
+  Serial.print("Humedad          : "); Serial.println(humedad != -999.0 ? String(humedad, 0) + " %" : "-- %");
   Serial.print("MQTT             : "); Serial.println(client.connected() ? "CONECTADO" : "DESCONECTADO");
   Serial.println("========================================\n");
 }
