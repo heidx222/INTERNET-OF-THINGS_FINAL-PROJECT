@@ -49,21 +49,6 @@ export default function Topbar({ onOpenSidebar }) {
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
-        {/* Status Chip del Sistema */}
-        <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate_tech-100/80 border border-slate_tech-200 text-xs font-medium text-slate_tech-700">
-          {wsTelemetriaConectado ? (
-            <>
-              <CheckCircle className="w-3.5 h-3.5 text-aqua-600" />
-              <span>Sistema Operativo</span>
-            </>
-          ) : (
-            <>
-              <Cpu className="w-3.5 h-3.5 text-critical animate-pulse" />
-              <span className="text-critical font-semibold">Conexión Inestable</span>
-            </>
-          )}
-        </div>
-
         {/* Reloj Industrial */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate_tech-50 border border-slate_tech-200 font-mono text-xs text-slate_tech-700">
           <Clock className="w-3.5 h-3.5 text-river-600" />
@@ -94,8 +79,8 @@ export default function Topbar({ onOpenSidebar }) {
             OP
           </div>
           <div className="hidden sm:block text-xs">
-            <p className="font-semibold text-slate_tech-900 leading-tight">Operador SCADA</p>
-            <p className="text-[11px] text-slate_tech-500">Sala Huaral</p>
+            <p className="font-semibold text-slate_tech-900 leading-tight">Operador UNMSM</p>
+            <p className="text-[11px] text-slate_tech-500">Sala Central</p>
           </div>
         </div>
       </div>

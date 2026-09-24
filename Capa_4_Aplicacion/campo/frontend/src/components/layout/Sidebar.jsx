@@ -18,8 +18,33 @@ const NAV_ITEMS = [
  * viewport y se controla mediante `isOpen`/`onClose` (ver Layout.jsx).
  */
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
-  const { wsTelemetriaConectado, wsAlertasConectado, alertas = [] } = useTelemetry();
-  const alertasNoAtendidas = alertas.filter((a) => !a.atendida).length;
+  const { wsTelemetriaConectado, wsAlertasConectado, telemetria } = useTelemetry();
+
+  const capasEstado = useMemo(() => {
+    // 1. Capa 1: Detecta si los sensores de campo transmiten datos recientes (últimos 30s)
+    const ultimaLectura = Array.isArray(telemetria) && telemetria.length > 0 ? telemetria[0] : null;
+    const tsUltimo = ultimaLectura?.timestamp_registro || ultimaLectura?.ts;
+    const haceCuanto = tsUltimo ? Date.now() - new Date(tsUltimo).getTime() : Infinity;
+    
+    // Si llegó una lectura en los últimos 30 segundos, Capa 1 está transmitiendo
+    const capa1Online = haceCuanto < 30000;
+
+    // 2. Capa 2: Conexión WebSocket de Node-RED (Transporte/Gateway)
+    const capa2Online = wsTelemetriaConectado;
+
+    // 3. Capa 3: Conexión al Motor IA (FastAPI / PostgreSQL)
+    const capa3Online = wsAlertasConectado;
+
+    // 4. Capa 4: Cliente React / Red Local
+    const capa4Online = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+    return {
+      capa1: { label: "C1: Campo", online: capa1Online, sub: capa1Online ? "Transmitiendo" : "Sin Lectura" },
+      capa2: { label: "C2: Gateway (Node-RED)", online: capa2Online, sub: capa2Online ? "WS Conectado" : "Desconectado" },
+      capa3: { label: "C3: IA & Servidores", online: capa3Online, sub: capa3Online ? "FastAPI / BD" : "Sin Servicio" },
+      capa4: { label: "C4: Interfaz", online: capa4Online, sub: capa4Online ? "En Línea" : "Sin Red" },
+    };
+  }, [wsTelemetriaConectado, wsAlertasConectado, telemetria]);
 
   return (
     <>
@@ -117,39 +142,47 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
           <div className="m-3 p-3.5 rounded-xl bg-slate_tech-950/60 border border-slate_tech-800/80 text-xs space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-aqua-400" /> Red Telemetría
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-river-950 text-river-300 font-mono">
-                Capa 4
+                <Activity className="w-3.5 h-3.5 text-aqua-400" /> Estado por Capas
               </span>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-2">
-                  <span className={clsx("w-2 h-2 rounded-full", wsTelemetriaConectado ? "bg-aqua-400 animate-pulse" : "bg-critical")} />
-                  Telemetría IoT
-                </span>
-                <span className="font-mono text-[10px] text-slate-400">
-                  {wsTelemetriaConectado ? "ONLINE" : "OFFLINE"}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-2">
-                  <span className={clsx("w-2 h-2 rounded-full", wsAlertasConectado ? "bg-aqua-400 animate-pulse" : "bg-critical")} />
-                  Motor IA
-                </span>
-                <span className="font-mono text-[10px] text-slate-400">
-                  {wsAlertasConectado ? "ONLINE" : "OFFLINE"}
-                </span>
-              </div>
+            <div className="space-y-2">
+              {Object.entries(capasEstado).map(([key, capa]) => (
+                <div key={key} className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={clsx(
+                        "w-2 h-2 rounded-full transition-all",
+                        capa.online ? "bg-aqua-400 animate-pulse shadow-sm shadow-aqua-400" : "bg-critical"
+                      )}
+                    />
+                    <span className="text-[11px] font-medium">{capa.label}</span>
+                  </span>
+                  <span
+                    className={clsx(
+                      "font-mono text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                      capa.online ? "bg-aqua-950/80 text-aqua-300" : "bg-red-950/80 text-red-400"
+                    )}
+                  >
+                    {capa.online ? "ONLINE" : "OFFLINE"}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
+          /* Vista Minimizada cuando el Sidebar está colapsado */
           <div className="p-3 flex flex-col items-center gap-2 border-t border-slate_tech-800">
-            <span className={clsx("w-2.5 h-2.5 rounded-full", wsTelemetriaConectado ? "bg-aqua-400 animate-pulse" : "bg-critical")} title="Telemetría IoT" />
-            <span className={clsx("w-2.5 h-2.5 rounded-full", wsAlertasConectado ? "bg-aqua-400 animate-pulse" : "bg-critical")} title="Motor IA" />
+            {Object.entries(capasEstado).map(([key, capa]) => (
+              <span
+                key={key}
+                className={clsx(
+                  "w-2.5 h-2.5 rounded-full transition-all",
+                  capa.online ? "bg-aqua-400 animate-pulse" : "bg-critical"
+                )}
+                title={`${capa.label}: ${capa.online ? "ONLINE" : "OFFLINE"}`}
+              />
+            ))}
           </div>
         )}
 
