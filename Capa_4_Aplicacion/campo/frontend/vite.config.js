@@ -3,14 +3,19 @@ import react from "@vitejs/plugin-react";
 
 /**
  * Yaku Qhawaq · Frontend Capa 4 (Producción Campo)
- * Configuración ligera de Vite optimizada para despliegue directo en Railway sin Docker.
+ * Configuración de Vite adaptada para despliegue en Railway sin Docker.
  */
 export default defineConfig({
   plugins: [react()],
   server: {
     host: "0.0.0.0",
     port: 5173,
-    allowedHosts:true,
+    allowedHosts: true,
+  },
+  preview: {
+    host: "0.0.0.0",
+    port: 4173,
+    allowedHosts: true,
   },
   build: {
     outDir: "dist",
