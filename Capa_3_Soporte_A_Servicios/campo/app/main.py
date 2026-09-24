@@ -3,12 +3,13 @@ import json
 import os
 import warnings
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from contextlib import asynccontextmanager
 
 import aiomqtt
 import asyncpg
-from fastapi import FastAPI, HTTPException
+# SE AÑADE WebSocket Y WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
@@ -25,7 +26,7 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/#")
 MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
-# Configuración Base de Datos PostgreSQL (Asegura formato para asyncpg)
+# Configuración Base de Datos PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -117,22 +118,21 @@ async def mqtt_listener():
                     topic = message.topic.value
                     
                     try:
-                        # 1. MONITOR (Parsing de Payload Capa 2)
+                        # 1. MONITOR
                         data_dict = json.loads(payload)
                         sensor_data = SensorData(**data_dict)
                         
-                        # Extraer nodo_id del JSON o fallback al tópico
                         if not sensor_data.node_id or sensor_data.node_id == "nodo_chancay_01":
                             sensor_data.node_id = topic.split("/")[-1]
                         
-                        # 2. ANALYZE (Inferencia IA + Reglas)
+                        # 2. ANALYZE
                         es_anomalia_ia = engine.analyze(sensor_data)
                         estado_mapek, requiere_alerta = engine.evaluate_mapek_state(sensor_data, es_anomalia_ia)
                         
-                        # 3. KNOWLEDGE (Persistencia en PostgreSQL)
+                        # 3. KNOWLEDGE
                         await guardar_en_bd(sensor_data, requiere_alerta, estado_mapek)
                         
-                        # 4. PLAN & EXECUTE (Disparo de Actuadores si hay anomalía)
+                        # 4. PLAN & EXECUTE
                         if requiere_alerta:
                             print(f"[ALERTA MAPE-K] Anomalía detectada en {sensor_data.node_id} | Estado: {estado_mapek}")
                             alerta = AlertaOut(
@@ -140,11 +140,19 @@ async def mqtt_listener():
                                 motivo=f"Alerta nivel {estado_mapek} detectada por MAPE-K / IA",
                                 severidad="CRITICA" if estado_mapek == 3 else "ALTA"
                             )
+
+                            # A) Publicar por MQTT hacia los actuadores de campo
                             await client.publish(
                                 f"{MQTT_TOPIC_PUB}{sensor_data.node_id}", 
                                 payload=alerta.model_dump_json(), 
                                 qos=1
                             )
+
+                            # B) NOTIFICAR EN TIEMPO REAL AL FRONTEND VÍA WEBSOCKET
+                            payload_ws = alerta.model_dump()
+                            payload_ws["node_id"] = sensor_data.node_id
+                            payload_ws["timestamp"] = datetime.now().isoformat()
+                            await manager.broadcast(payload_ws)
                             
                     except ValidationError as e:
                         print(f"[SECURITY] Payload incompatible rechazado: {e}")
@@ -157,6 +165,9 @@ async def mqtt_listener():
             print(f"[NETWORK-WARN] Conexión perdida con Mosquitto ({error}). Reintentando en 5s...")
             await asyncio.sleep(5)
 
+# ==========================================
+# LIFESPAN & INSTANCIA FASTAPI
+# ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[DB] Creando pool de conexiones con PostgreSQL...")
@@ -189,6 +200,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==========================================
+# ENDPOINT WEBSOCKET (SOLUCIONA EL ERROR 404)
+# ==========================================
+@app.websocket("/ws/alertas")
+async def websocket_alertas_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Mantiene viva la conexión escuchando pings/mensajes del cliente
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"[WEBSOCKET-ERROR] Error en conexión: {e}")
+        manager.disconnect(websocket)
+
+# ==========================================
+# ENDPOINTS REST HTTP
+# ==========================================
 @app.get("/")
 def root():
     return {"proyecto": "Yaku Qhawaq", "capa": "3 - Soporte a Servicios", "status": "online"}
