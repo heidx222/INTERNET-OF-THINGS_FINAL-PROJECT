@@ -17,20 +17,41 @@ export function useWebSocket(path, onMessage) {
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
+
+  // Mantener actualizado el callback sin forzar re-suscripciones
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   const connect = useCallback(() => {
-    // Obtener la URL del backend desde las variables de entorno o fallback
+    // 1. Obtener la URL base
     const apiBase = import.meta.env.VITE_API_BASE_URL || "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
-    // Reemplazar http/https por ws/wss
-    const wsBaseUrl = apiBase.replace(/^http/, "ws");
+    
+    // 2. Convertir correctamente http/https a ws/wss
+    let wsBaseUrl = apiBase.startsWith("https")
+      ? apiBase.replace(/^https/, "wss")
+      : apiBase.replace(/^http/, "ws");
+
+    // Limpiar diagonal final si la URL la tiene para evitar '//ws/'
+    if (wsBaseUrl.endsWith("/")) {
+      wsBaseUrl = wsBaseUrl.slice(0, -1);
+    }
+
     const url = `${wsBaseUrl}${path}`;
 
     try {
+      // Limpiar sockets o timers previos antes de conectar
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
-      ws.onopen = () => setConnected(true);
+      ws.onopen = () => {
+        console.log(`[WS CONNECTED] Canal: ${path}`);
+        setConnected(true);
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -43,14 +64,21 @@ export function useWebSocket(path, onMessage) {
 
       ws.onclose = () => {
         setConnected(false);
-        reconnectTimer.current = setTimeout(connect, 3000);
+        // Intentar reconexión limpia tras 3 segundos
+        reconnectTimer.current = setTimeout(() => {
+          connect();
+        }, 3000);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error(`[WS ERROR] Canal ${path}:`, err);
         ws.close();
       };
     } catch (e) {
-      reconnectTimer.current = setTimeout(connect, 3000);
+      console.error(`[WS EXCEPTION] Fallo al instanciar socket:`, e);
+      reconnectTimer.current = setTimeout(() => {
+        connect();
+      }, 3000);
     }
   }, [path]);
 
@@ -58,7 +86,10 @@ export function useWebSocket(path, onMessage) {
     connect();
     return () => {
       clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // Evitar reconexión al desmontar
+        wsRef.current.close();
+      }
     };
   }, [connect]);
 
