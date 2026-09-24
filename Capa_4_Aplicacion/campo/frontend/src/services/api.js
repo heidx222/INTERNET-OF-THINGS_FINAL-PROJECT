@@ -35,7 +35,6 @@ export const getSaludHidrica = () =>
 
 export const getAlertas = ({ nodoId, limit = 100 } = {}) =>
   api.get("/telemetria/reciente", { params: { limit } }).then((r) => {
-    // Filtrar en frontend registros que generaron alerta
     return r.data.filter((d) => d.alerta === true);
   });
 
@@ -45,6 +44,13 @@ export const getNodosGIS = () =>
     { id: "nodo_chancay_02", nombre: "Estación Acos (Media Cuenca)", lat: -11.2722, lng: -76.8153 },
     { id: "nodo_chancay_03", nombre: "Estación Chancay (Desembocadura)", lat: -11.5683, lng: -77.2703 },
   ]);
+
+// --- Exportación de CSV ---
+export const buildExportCsvUrl = ({ tipo = "alertas", nodoId } = {}) => {
+  const params = new URLSearchParams({ tipo });
+  if (nodoId) params.set("nodo_id", nodoId);
+  return `${baseURL}/telemetria/historico?${params.toString()}`;
+};
 
 // --- Health Check ---
 export const getHealth = () => api.get("/").then((r) => r.data);
