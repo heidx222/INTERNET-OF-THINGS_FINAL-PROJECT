@@ -20,11 +20,11 @@ export function useWebSocket(path, onMessage) {
   onMessageRef.current = onMessage;
 
   const connect = useCallback(() => {
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const host = window.location.host;
-    // En dev, Vite hace proxy de /ws hacia el backend (ver vite.config.js).
-    // En producción, NGINX cumple el mismo rol (ver frontend/nginx.conf).
-    const url = `${protocol}://${host}${path}`;
+    // Obtener la URL del backend desde las variables de entorno o fallback
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
+    // Reemplazar http/https por ws/wss
+    const wsBaseUrl = apiBase.replace(/^http/, "ws");
+    const url = `${wsBaseUrl}${path}`;
 
     try {
       const ws = new WebSocket(url);

@@ -66,7 +66,7 @@ export default function Telecontrol() {
 
   const cargarHistorial = useCallback(() => {
     getHistorialTelecontrol(50)
-      .then(setHistorial)
+      .then((data) => setHistorial(Array.isArray(data) ? data : []))
       .catch(() => setHistorial([]));
   }, []);
 
@@ -78,7 +78,7 @@ export default function Telecontrol() {
     setCargando(actuador);
     setFeedback(null);
     try {
-      const resp = await enviarComandoTelecontrol({
+      await enviarComandoTelecontrol({
         nodoId,
         actuador,
         accion,
@@ -132,13 +132,6 @@ export default function Telecontrol() {
           onAccion={(accion) => ejecutarComando("sirena", accion)}
           cargando={cargando === "sirena"}
         />
-        <ActuadorControl
-          icon={DoorClosed}
-          titulo="Compuerta de Desborde"
-          descripcion="Control manual de la compuerta de contención hidráulica simulada."
-          onAccion={(accion) => ejecutarComando("compuerta", accion)}
-          cargando={cargando === "compuerta"}
-        />
       </div>
 
       <Card
@@ -165,23 +158,25 @@ export default function Telecontrol() {
                   </td>
                 </tr>
               )}
-              {historial.map((h) => (
-                <tr key={h.id} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
-                  <td className="py-2 pr-4 whitespace-nowrap text-slate_tech-600">
-                    {format(new Date(h.ts), "dd/MM/yyyy HH:mm:ss")}
-                  </td>
-                  <td className="py-2 pr-4 font-mono text-xs">{h.nodo_id}</td>
-                  <td className="py-2 pr-4 capitalize">{h.actuador}</td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`font-semibold ${h.accion === "activar" ? "text-critical" : "text-aqua-600"}`}
-                    >
-                      {h.accion.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-slate_tech-600">{h.operador}</td>
-                </tr>
-              ))}
+              {historial.map((h) => {
+                const fechaValida = h.timestamp || h.ts;
+                const fechaStr = fechaValida ? format(new Date(fechaValida), "dd/MM/yyyy HH:mm:ss") : "—";
+                return (
+                  <tr key={h.id || Math.random()} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
+                    <td className="py-2 pr-4 whitespace-nowrap text-slate_tech-600">{fechaStr}</td>
+                    <td className="py-2 pr-4 font-mono text-xs">{h.nodo_id || h.node_id}</td>
+                    <td className="py-2 pr-4 capitalize">{h.actuador}</td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={`font-semibold ${h.accion === "activar" ? "text-critical" : "text-aqua-600"}`}
+                      >
+                        {h.accion?.toUpperCase() || "N/A"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-slate_tech-600">{h.operador}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

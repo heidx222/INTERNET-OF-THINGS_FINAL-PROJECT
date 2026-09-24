@@ -37,6 +37,17 @@ export function TelemetryProvider({ children }) {
   const [saludGlobal, setSaludGlobal] = useState(null);
   const [cargandoInicial, setCargandoInicial] = useState(true);
 
+  // Helper para asegurar que el objeto tenga las propiedades esperadas por los componentes
+  const normalizarLectura = (lectura) => {
+    if (!lectura) return null;
+    const id = lectura.node_id || lectura.nodo_id || "nodo_chancay_01";
+    return {
+      ...lectura,
+      nodo_id: id,
+      ts: lectura.timestamp_ms || lectura.ts || Date.now(),
+    };
+  };
+
   // --- Carga inicial (snapshot) vía REST, antes de que lleguen eventos WS ---
   useEffect(() => {
     let activo = true;
@@ -50,11 +61,16 @@ export function TelemetryProvider({ children }) {
         if (!activo) return;
 
         const nodosIniciales = {};
-        (Array.isArray(actual) ? actual : []).forEach((lectura) => {
-          if (lectura && lectura.nodo_id) nodosIniciales[lectura.nodo_id] = lectura;
+        // Si actual es un objeto individual (lectura más reciente) o un array
+        const listaActual = Array.isArray(actual) ? actual : (actual ? [actual] : []);
+        
+        listaActual.forEach((item) => {
+          const norm = normalizarLectura(item);
+          if (norm) nodosIniciales[norm.nodo_id] = norm;
         });
+
         setNodos(nodosIniciales);
-        setAlertas(alertasResp?.alertas || []);
+        setAlertas(Array.isArray(alertasResp) ? alertasResp : []);
         setSaludGlobal(salud);
       } finally {
         if (activo) setCargandoInicial(false);
@@ -67,26 +83,27 @@ export function TelemetryProvider({ children }) {
 
   // --- Ingesta en vivo: /ws/telemetria (Tab 01 del backend) ---
   const onTelemetria = useCallback((lectura) => {
-    if (!lectura || !lectura.nodo_id) return;
+    const norm = normalizarLectura(lectura);
+    if (!norm) return;
 
-    setNodos((prev) => ({ ...prev, [lectura.nodo_id]: lectura }));
+    setNodos((prev) => ({ ...prev, [norm.nodo_id]: norm }));
 
     setSeriesPorNodo((prev) => {
-      const actual = prev[lectura.nodo_id] || [];
-      const nueva = [...actual, lectura].slice(-MAX_SERIE_LOCAL);
-      return { ...prev, [lectura.nodo_id]: nueva };
+      const actual = prev[norm.nodo_id] || [];
+      const nueva = [...actual, norm].slice(-MAX_SERIE_LOCAL);
+      return { ...prev, [norm.nodo_id]: nueva };
     });
   }, []);
 
-  // --- Ingesta en vivo: /ws/alertas (Tab 02 del backend) ---
+  // --- Ingesta en vivo: /ws/alertas ---
   const onAlerta = useCallback((alerta) => {
-    if (!alerta || !alerta.id) return;
+    if (!alerta) return;
     setAlertas((prev) => [alerta, ...prev].slice(0, MAX_ALERTAS_LOCAL));
   }, []);
 
   const { connected: wsTelemetriaConectado } = useWebSocket("/ws/telemetria", onTelemetria);
   const { connected: wsAlertasConectado } = useWebSocket("/ws/alertas", onAlerta);
-
+  
   // --- Polling de respaldo para el índice de salud hídrica global (cada 15s) ---
   useEffect(() => {
     const interval = setInterval(() => {
