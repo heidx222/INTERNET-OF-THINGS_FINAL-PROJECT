@@ -10,6 +10,7 @@ const FILTROS = [
   { value: "TODAS", label: "Todas" },
   { value: "CRITICO", label: "Críticas" },
   { value: "ADVERTENCIA", label: "Advertencias" },
+  { value: "INFO", label: "Informativas" },
 ];
 
 /**
@@ -20,17 +21,39 @@ const FILTROS = [
  * cronológico completo de todas las anomalías detectadas por la IA
  * (fuente: `GET /api/alertas`, actualizado en vivo por `WS /ws/alertas`).
  */
+
+/**
+ * Normaliza la severidad que viene del Backend/Payloads
+ */
+function normalizarSeveridad(sev) {
+  if (!sev) return "INFO";
+  const s = String(sev).toUpperCase();
+  if (s.includes("CRIT")) return "CRITICO";
+  if (s.includes("ADV") || s.includes("WARN")) return "ADVERTENCIA";
+  return "INFO";
+}
+
 export default function Notificaciones() {
-  const { alertas, marcarAlertaAtendida } = useTelemetry();
+  const { alertas = [], marcarAlertaAtendida } = useTelemetry();
   const [filtro, setFiltro] = useState("TODAS");
 
-  const alertasFiltradas = useMemo(() => {
-    if (filtro === "TODAS") return alertas;
-    return alertas.filter((a) => a.severidad === filtro);
-  }, [alertas, filtro]);
+  // Garantizar array válido
+  const listaAlertas = Array.isArray(alertas) ? alertas : [];
 
-  const criticas = alertas.filter((a) => a.severidad === "CRITICO").length;
-  const advertencias = alertas.filter((a) => a.severidad === "ADVERTENCIA").length;
+  const alertasFiltradas = useMemo(() => {
+    if (filtro === "TODAS") return listaAlertas;
+    return listaAlertas.filter((a) => normalizarSeveridad(a.severidad || a.nivel) === filtro);
+  }, [listaAlertas, filtro]);
+
+  const criticas = useMemo(
+    () => listaAlertas.filter((a) => normalizarSeveridad(a.severidad || a.nivel) === "CRITICO").length,
+    [listaAlertas]
+  );
+
+  const advertencias = useMemo(
+    () => listaAlertas.filter((a) => normalizarSeveridad(a.severidad || a.nivel) === "ADVERTENCIA").length,
+    [listaAlertas]
+  );
 
   return (
     <div className="space-y-6">
@@ -89,46 +112,62 @@ export default function Notificaciones() {
             </p>
           )}
 
-          {alertasFiltradas.map((a) => (
-            <div
-              key={a.id}
-              className={`flex items-start gap-3 p-4 rounded-xl border transition-colors ${
-                a.atendida
-                  ? "bg-slate_tech-50 border-slate_tech-200"
-                  : a.severidad === "CRITICO"
-                  ? "bg-critical/5 border-critical/30 animate-pulse-slow"
-                  : "bg-warning/5 border-warning/30"
-              }`}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <SeverityBadge severidad={a.severidad} size="sm" />
-                  <span className="text-[11px] font-mono text-slate_tech-400">{a.id}</span>
-                  <span className="text-[11px] text-slate_tech-400">
-                    {format(new Date(a.ts), "dd/MM/yyyy HH:mm:ss")}
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-slate_tech-800">{a.mensaje}</p>
-                <p className="text-xs text-slate_tech-500 mt-0.5">
-                  Nodo: <span className="font-mono">{a.nodo_id}</span> · Origen: {a.origen}
-                </p>
-              </div>
+          {alertasFiltradas.map((a, idx) => {
+            const idAlerta = a.id || `alt_${idx}_${Date.now()}`;
+            const sevNorm = normalizarSeveridad(a.severidad || a.nivel);
+            const nodoId = a.nodo_id || a.node_id || "nodo_chancay_01";
+            
+            // Extracción y formateo seguro de la fecha
+            const rawFecha = a.ts || a.timestamp || a.timestamp_ms || a.created_at;
+            let fechaStr = "—";
+            if (rawFecha) {
+              const d = new Date(rawFecha);
+              if (!isNaN(d.getTime())) {
+                fechaStr = format(d, "dd/MM/yyyy HH:mm:ss");
+              }
+            }
 
-              {!a.atendida ? (
-                <button
-                  onClick={() => marcarAlertaAtendida(a.id)}
-                  title="Marcar como atendida"
-                  className="shrink-0 p-2 rounded-lg hover:bg-white text-slate_tech-400 hover:text-aqua-600 transition-colors"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                </button>
-              ) : (
-                <span className="shrink-0 text-[11px] font-medium text-aqua-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> Atendida
-                </span>
-              )}
-            </div>
-          ))}
+            return (
+              <div
+                key={idAlerta}
+                className={`flex items-start gap-3 p-4 rounded-xl border transition-colors ${
+                  a.atendida
+                    ? "bg-slate_tech-50 border-slate_tech-200"
+                    : sevNorm === "CRITICO"
+                    ? "bg-critical/5 border-critical/30 animate-pulse-slow"
+                    : "bg-warning/5 border-warning/30"
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <SeverityBadge severidad={sevNorm} size="sm" />
+                    <span className="text-[11px] font-mono text-slate_tech-400">{idAlerta}</span>
+                    <span className="text-[11px] text-slate_tech-400">{fechaStr}</span>
+                  </div>
+                  <p className="text-sm font-medium text-slate_tech-800">
+                    {a.mensaje || a.detalles || "Anomalía o evento detectado en los sensores."}
+                  </p>
+                  <p className="text-xs text-slate_tech-500 mt-0.5">
+                    Nodo: <span className="font-mono">{nodoId}</span> · Origen: {a.origen || "Motor IA"}
+                  </p>
+                </div>
+
+                {!a.atendida ? (
+                  <button
+                    onClick={() => marcarAlertaAtendida && marcarAlertaAtendida(idAlerta)}
+                    title="Marcar como atendida"
+                    className="shrink-0 p-2 rounded-lg hover:bg-white text-slate_tech-400 hover:text-aqua-600 transition-colors"
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-[11px] font-medium text-aqua-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> Atendida
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>
