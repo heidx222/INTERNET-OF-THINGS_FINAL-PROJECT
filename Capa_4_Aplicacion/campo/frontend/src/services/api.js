@@ -45,6 +45,27 @@ export const getNodosGIS = () =>
     { id: "nodo_chancay_03", nombre: "Estación Chancay (Desembocadura)", lat: -11.5683, lng: -77.2703 },
   ]);
 
+// --- Endpoints de Telecontrol (Requeridos por Telecontrol.jsx) ---
+export const enviarComandoTelecontrol = ({ nodoId, actuador, accion, operador }) =>
+  Promise.resolve({
+    status: "success",
+    message: `Comando '${accion}' enviado con éxito al actuador '${actuador}' en '${nodoId}'`,
+    timestamp: new Date().toISOString()
+  });
+
+export const getHistorialTelecontrol = (limit = 100) =>
+  Promise.resolve([
+    {
+      id: "cmd_001",
+      nodo_id: "nodo_chancay_01",
+      actuador: "Compuerta Principal",
+      accion: "ABRIR 50%",
+      operador: "Sistema Automático MAPEK",
+      timestamp: new Date().toISOString(),
+      estado: "EJECUTADO"
+    }
+  ]);
+
 // --- Exportación de CSV ---
 export const buildExportCsvUrl = ({ tipo = "alertas", nodoId } = {}) => {
   const params = new URLSearchParams({ tipo });
