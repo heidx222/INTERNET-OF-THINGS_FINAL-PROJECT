@@ -131,9 +131,10 @@ async def mqtt_listener():
                         app_state[f"last_seen_{sensor_data.node_id}"] = datetime.now()
 
                         # 2. ANALYZE
-                        es_anomalia_ia = engine.analyze(sensor_data)
+                        es_anomalia_ia = bool(engine.analyze(sensor_data)) # <-- Convertir a bool nativo de Python
                         estado_mapek, requiere_alerta = engine.evaluate_mapek_state(sensor_data, es_anomalia_ia)
-                        
+                        estado_mapek = int(estado_mapek)
+
                         # 3. KNOWLEDGE
                         await guardar_en_bd(sensor_data, requiere_alerta, estado_mapek)
                         
