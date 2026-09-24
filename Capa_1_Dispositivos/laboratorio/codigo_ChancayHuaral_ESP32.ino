@@ -18,8 +18,8 @@
 // ============================================================
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
 // ============================================================
-#define WIFI_SSID       "Galaxy A12DF7E"
-#define WIFI_PASS       "Contrasena"
+#define WIFI_SSID       "LAB 06 NP"
+#define WIFI_PASS       "AL1BA4TE&T3"
 
 // Broker Mosquitto desplegado en Railway (Capa 2)
 #define MQTT_SERVER     "iriguchi.proxy.rlwy.net"     
