@@ -5,6 +5,13 @@
  */
 
 export const NODO_POR_DEFECTO = "nodo_chancay_01";
+// Centro operativo de la Cuenca Chancay-Huaral para el mapa Leaflet
+export const CENTRO_CUENCA = [-11.4885, -77.0323]; // Huaral / Santo Domingo
+export const RECORRIDO_RIO = [
+  [-11.2722, -76.8153], // Alta Cuenca (San Miguel de Acos)
+  [-11.4500, -76.9500], // Media Cuenca (Santo Domingo / Huaral)
+  [-11.5681, -77.2703], // Baja Cuenca (Bocatoma / Chancay - Océano Pacífico)
+];
 
 export const SENSOR_META = {
   nivel_m: { label: "Nivel del Río", unidad: "m", color: "#1A83AC" },
@@ -29,8 +36,8 @@ export const NODOS_CUENCA = [
     id: "nodo_chancay_01", 
     nombre: "Estación Santo Domingo - Huaral (Principal)",
     tipo: "Hidrométrica Control",
-    lat: -11.4925,
-    lng: -77.2081
+    lat: -11.4885, 
+    lng: -77.0323,
   },
   { 
     id: "nodo_chancay_02", 
@@ -43,7 +50,8 @@ export const NODOS_CUENCA = [
     id: "nodo_chancay_03", 
     nombre: "Estación Chancay - Bocatoma (Baja Cuenca)",
     tipo: "Monitoreo Calidad de Agua",
-    lat: -11.5683,
+    lat: -11.56,
     lng: -77.2703
+    , 
   },
 ];
