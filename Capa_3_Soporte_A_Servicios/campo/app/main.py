@@ -23,7 +23,7 @@ MQTT_BROKER = os.getenv("MQTT_HOST", os.getenv("MQTT_BROKER", "iriguchi.proxy.rl
 MQTT_PORT = int(os.getenv("MQTT_PORT", "28182"))
 MQTT_USER = os.getenv("MQTT_USER", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
-MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/tiempo_real/#")
+MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/#")
 MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
 # Configuración Base de Datos PostgreSQL
@@ -131,9 +131,9 @@ async def mqtt_listener():
                         app_state[f"last_seen_{sensor_data.node_id}"] = datetime.now()
 
                         # 2. ANALYZE
-                        es_anomalia_ia = bool(engine.analyze(sensor_data)) # <-- Convertir a bool nativo de Python
-                        estado_mapek, requiere_alerta = engine.evaluate_mapek_state(sensor_data, es_anomalia_ia)
-                        estado_mapek = int(estado_mapek)
+                        # es_anomalia_ia = bool(engine.analyze(sensor_data)) # <-- Convertir a bool nativo de Python
+                        # estado_mapek, requiere_alerta = engine.evaluate_mapek_state(sensor_data, es_anomalia_ia)
+                        # estado_mapek = int(estado_mapek)
 
                         # 3. KNOWLEDGE
                         await guardar_en_bd(sensor_data, requiere_alerta, estado_mapek)
