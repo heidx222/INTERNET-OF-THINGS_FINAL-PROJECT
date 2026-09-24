@@ -23,7 +23,7 @@ MQTT_BROKER = os.getenv("MQTT_HOST", os.getenv("MQTT_BROKER", "iriguchi.proxy.rl
 MQTT_PORT = int(os.getenv("MQTT_PORT", "28182"))
 MQTT_USER = os.getenv("MQTT_USER", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
-MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/#")
+MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC", "chancay/cuenca/tiempo_real/#")
 MQTT_TOPIC_PUB = "chancay/actuadores/alerta/"
 
 # Configuración Base de Datos PostgreSQL
@@ -123,9 +123,13 @@ async def mqtt_listener():
                         data_dict = json.loads(payload)
                         sensor_data = SensorData(**data_dict)
                         
-                        if not sensor_data.node_id or sensor_data.node_id == "nodo_chancay_01":
+                        # Solo si el JSON no trae node_id, extraerlo del final del tópico
+                        if not sensor_data.node_id:
                             sensor_data.node_id = topic.split("/")[-1]
-                        
+
+                        # Registrar la hora del último mensaje recibido por nodo para el estado ONLINE
+                        app_state[f"last_seen_{sensor_data.node_id}"] = datetime.now()
+
                         # 2. ANALYZE
                         es_anomalia_ia = engine.analyze(sensor_data)
                         estado_mapek, requiere_alerta = engine.evaluate_mapek_state(sensor_data, es_anomalia_ia)
@@ -312,3 +316,25 @@ async def api_guardar_historico(payload: dict):
         return {"status": "success", "message": "Datos guardados exitosamente vía FastAPI"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error en inserción: {str(e)}")
+
+@app.get("/nodos/estado")
+async def obtener_estado_nodos():
+    """Endpoint consultado por el Sidebar de Capa 4 para verificar la presencia de Capa 1"""
+    ahora = datetime.now()
+    
+    # Evalúa el nodo principal
+    ultimo_registro = app_state.get("last_seen_nodo_chancay_01")
+    
+    if ultimo_registro:
+        diferencia_seg = (ahora - ultimo_registro).total_seconds()
+        # Si envió un mensaje hace menos de 20 segundos, está ONLINE
+        is_online = diferencia_seg < 20 
+    else:
+        is_online = False
+        diferencia_seg = None
+
+    return {
+        "node_id": "nodo_chancay_01",
+        "status": "ONLINE" if is_online else "OFFLINE",
+        "segundos_desde_ultimo_envio": int(diferencia_seg) if diferencia_seg else "N/A"
+    }

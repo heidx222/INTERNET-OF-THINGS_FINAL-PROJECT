@@ -132,13 +132,6 @@ export default function Telecontrol() {
           onAccion={(accion) => ejecutarComando("sirena", accion)}
           cargando={cargando === "sirena"}
         />
-        <ActuadorControl
-          icon={DoorClosed}
-          titulo="Compuerta de Desborde"
-          descripcion="Control manual de la compuerta de contención hidráulica simulada."
-          onAccion={(accion) => ejecutarComando("compuerta", accion)}
-          cargando={cargando === "compuerta"}
-        />
       </div>
 
       <Card
