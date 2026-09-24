@@ -124,18 +124,24 @@ async def mqtt_listener():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[DB] Creando pool de conexiones con PostgreSQL...")
-    if DATABASE_URL:
-        app_state["db_pool"] = await asyncpg.create_pool(dsn=DATABASE_URL)
-    else:
-        app_state["db_pool"] = await asyncpg.create_pool(
-            user=DB_USER, password=DB_PASS, database=DB_NAME, host=DB_HOST, port=DB_PORT
-        )
+    try:
+        if DATABASE_URL:
+            app_state["db_pool"] = await asyncpg.create_pool(dsn=DATABASE_URL)
+        else:
+            app_state["db_pool"] = await asyncpg.create_pool(
+                user=DB_USER, password=DB_PASS, database=DB_NAME, host=DB_HOST, port=DB_PORT
+            )
+        print("[DB] Pool de PostgreSQL conectado correctamente.")
+    except Exception as e:
+        print(f"[DB-WARN] No se pudo conectar a PostgreSQL localmente: {e}")
+        app_state["db_pool"] = None
     
     task = asyncio.create_task(mqtt_listener())
     yield
     task.cancel()
-    await app_state["db_pool"].close()
-    print("[DB] Pool de conexiones cerrado.")
+    if app_state.get("db_pool"):
+        await app_state["db_pool"].close()
+        print("[DB] Pool de conexiones cerrado.")
 
 app = FastAPI(title="Motor Autonómico MAPE-K - Yaku Qhawaq", lifespan=lifespan)
 
