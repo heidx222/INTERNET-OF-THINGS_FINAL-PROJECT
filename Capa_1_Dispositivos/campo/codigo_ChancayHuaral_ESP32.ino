@@ -38,12 +38,12 @@
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
 // ============================================================
 // [EDITA] Red WiFi del despliegue de campo.
-#define WIFI_SSID       "TU_RED_WIFI"
-#define WIFI_PASS       "TU_PASSWORD_WIFI"
+#define WIFI_SSID       "LAB 06 NP"
+#define WIFI_PASS       "AL1BA4TE&T3"
 
 // [EDITA] Broker Mosquitto desplegado en Railway (Capa 2).
 // Usa el host/puerto del TCP Proxy público del servicio broker-mqtt.
-#define MQTT_SERVER     "TU_HOST.proxy.rlwy.net"
+#define MQTT_SERVER     iriguchi.proxy.rlwy.net:28182
 #define MQTT_PORT       28182
 // Credencial del nodo definida en la ACL de la Capa 2 (postgres/init.sql).
 // Contraseña en claro de desarrollo: nodoChancay01.
