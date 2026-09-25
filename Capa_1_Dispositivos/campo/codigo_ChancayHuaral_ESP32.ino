@@ -38,12 +38,12 @@
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
 // ============================================================
 // [EDITA] Red WiFi del despliegue de campo.
-#define WIFI_SSID       "LAB 06 NP"
-#define WIFI_PASS       "AL1BA4TE&T3"
+#define WIFI_SSID       "Mateo"
+#define WIFI_PASS       "CHILCAY2025"
 
 // [EDITA] Broker Mosquitto desplegado en Railway (Capa 2).
 // Usa el host/puerto del TCP Proxy público del servicio broker-mqtt.
-#define MQTT_SERVER     iriguchi.proxy.rlwy.net:28182
+#define MQTT_SERVER     "iriguchi.proxy.rlwy.net"
 #define MQTT_PORT       28182
 // Credencial del nodo definida en la ACL de la Capa 2 (postgres/init.sql).
 // Contraseña en claro de desarrollo: nodoChancay01.
@@ -164,31 +164,50 @@ uint64_t epochMsActual() {
 // CALLBACK MQTT: TELECONTROL Y COMANDOS DESDE CAPA 3 Y 4
 // ============================================================
 void callbackMQTT(char* topic, byte* payload, unsigned int length) {
-  String mensaje = "";
-  for (unsigned int i = 0; i < length; i++) {
-    mensaje += (char)payload[i];
-  }
-
   Serial.print("[TELECONTROL MQTT] Comando recibido en ");
   Serial.print(topic);
   Serial.print(": ");
-  Serial.println(mensaje);
 
-  // IMPORTANTE: evaluamos "DESACTIVAR" ANTES que "ACTIVAR", porque la cadena
-  // "DESACTIVAR" CONTIENE la subcadena "ACTIVAR" (bug del laboratorio).
-  if (mensaje.indexOf("DESACTIVAR") >= 0 || mensaje.indexOf("DESPEJAR") >= 0 ||
-      mensaje.indexOf("NORMAL") >= 0 || mensaje.indexOf("CONFIRMAR") >= 0) {
+  // Impresión directa en consola para depuración
+  for (unsigned int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+
+  // Búsqueda de palabras clave directamente en el búfer de bytes
+  bool activar = false;
+  bool desactivar = false;
+
+  for (unsigned int i = 0; i < length; i++) {
+    // Evalúa coincidencias de "ACTIVAR", "SIRENA" o "BUZZER" (soporta mayúsculas y minúsculas)
+    if ((payload[i] == 'A' || payload[i] == 'a') && (i + 6 < length)) {
+      if (strncasecmp((char*)&payload[i], "ACTIVAR", 7) == 0) activar = true;
+    }
+    if ((payload[i] == 'D' || payload[i] == 'd') && (i + 9 < length)) {
+      if (strncasecmp((char*)&payload[i], "DESACTIVAR", 10) == 0) desactivar = true;
+    }
+    if ((payload[i] == 'S' || payload[i] == 's') && (i + 5 < length)) {
+      if (strncasecmp((char*)&payload[i], "SIRENA", 6) == 0) activar = true;
+    }
+    if ((payload[i] == 'B' || payload[i] == 'b') && (i + 5 < length)) {
+      if (strncasecmp((char*)&payload[i], "BUZZER", 6) == 0) activar = true;
+    }
+  }
+
+  // Ejecución de la acción según el resultado del escaneo
+  if (desactivar) {
     alertaCritica = false;
     tipoEmergencia = 0;
     mensajeAlerta = "SISTEMA OPTIMO";
     digitalWrite(PIN_BUZZER, LOW);
-    Serial.println("[ACTUADOR] Alerta despejada (orden remota de Capa 3/4).");
-  }
-  else if (mensaje.indexOf("ACTIVAR") >= 0 || mensaje.indexOf("CRITICA") >= 0) {
+    Serial.println("[ACTUADOR] Sirena DESACTIVADA correctamente.");
+  } 
+  else if (activar) {
     alertaCritica = true;
     tipoEmergencia = 2;
-    mensajeAlerta = "ALERTA REMOTA IA";
-    Serial.println("[ACTUADOR] Sirena y compuerta activadas por el lazo MAPE-K central.");
+    mensajeAlerta = "ALERTA TELECONTROL";
+    digitalWrite(PIN_BUZZER, HIGH);
+    Serial.println("[ACTUADOR] Sirena ACTIVADA correctamente desde la web!");
   }
 }
 
