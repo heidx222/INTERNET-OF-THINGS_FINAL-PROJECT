@@ -25,7 +25,7 @@ import {
  */
 
 const TelemetryContext = createContext(null);
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://TU-BACKEND-FASTAPI.up.railway.app";
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://internet-of-thingsfinal-project-production-80a2.up.railway.app";
 
 const MAX_SERIE_LOCAL = 300;
 const MAX_ALERTAS_LOCAL = 500;
