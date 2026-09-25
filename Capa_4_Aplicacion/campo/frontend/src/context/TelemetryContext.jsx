@@ -25,6 +25,7 @@ import {
  */
 
 const TelemetryContext = createContext(null);
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://TU-BACKEND-FASTAPI.up.railway.app";
 
 const MAX_SERIE_LOCAL = 300;
 const MAX_ALERTAS_LOCAL = 500;
@@ -124,8 +125,8 @@ export function TelemetryProvider({ children }) {
     ].slice(0, MAX_ALERTAS_LOCAL));
   }, []);
 
-  const { connected: wsTelemetriaConectado } = useWebSocket("/ws/telemetria", onTelemetria);
-  const { connected: wsAlertasConectado } = useWebSocket("/ws/alertas", onAlerta);
+  const { connected: wsTelemetriaConectado } = useWebSocket(`${WS_BASE_URL}/ws/telemetria`, onTelemetria);
+  const { connected: wsAlertasConectado } = useWebSocket(`${WS_BASE_URL}/ws/alertas`, onAlerta);
 
   // --- Polling de respaldo para el índice de salud hídrica global (cada 15s) ---
   useEffect(() => {
