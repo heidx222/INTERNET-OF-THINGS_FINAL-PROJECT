@@ -51,12 +51,19 @@ export const getSerieTemporal = (nodoId, limit = 200) =>
     .get("/telemetria/historico", { params: { nodo_id: nodoId, limit } })
     .then((r) => r.data || []);
 
-export const getTelemetriaHistorica = ({ desde, hasta, nodoId, limit = 500 } = {}) =>
-  api
-    .get("/telemetria/historico", {
-      params: { desde, hasta, nodo_id: nodoId, limit },
-    })
-    .then((r) => r.data || []);
+export async function getTelemetriaHistorica({ desde, hasta, nodoId, limit = 500 } = {}) {
+  const params = new URLSearchParams();
+  
+  if (nodoId) params.append("node_id", nodoId);
+  if (desde) params.append("desde", desde);
+  if (hasta) params.append("hasta", hasta);
+  if (limit) params.append("limit", String(limit));
+
+  const queryStr = params.toString();
+  const endpoint = `/telemetria/historico${queryStr ? `?${queryStr}` : ""}`;
+
+  return await fetchApi(endpoint);
+}
 
 // --- Diagnóstico con Inferencia IA ---
 export const postDiagnostico = (data) =>
