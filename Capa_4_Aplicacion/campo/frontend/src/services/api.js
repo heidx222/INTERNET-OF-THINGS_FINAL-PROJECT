@@ -17,10 +17,16 @@ import { NODOS_CUENCA } from "../utils/constants.js";
  *   GET  /export/csv               → exportación CSV server-side
  *   WS   /ws/telemetria, /ws/alertas
  */
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
-
+function obtenerBaseUrl() {
+  let envUrl = import.meta.env.VITE_API_BASE_URL || "internet-of-thingsfinal-project-production-80a2.up.railway.app";
+  
+  // Limpiar cualquier protocolo previo para procesarlo limpiamente
+  let domainOnly = envUrl.replace(/^(https?:\/\/|wss?:\/\/)/, "").replace(/\/+$/, "");
+  
+  // Devuelve la URL lista con HTTPS
+  return `https://${domainOnly}`;
+}
+const baseURL = obtenerBaseUrl();
 export const api = axios.create({
   baseURL,
   timeout: 10000,
@@ -51,19 +57,14 @@ export const getSerieTemporal = (nodoId, limit = 200) =>
     .get("/telemetria/historico", { params: { nodo_id: nodoId, limit } })
     .then((r) => r.data || []);
 
-export async function getTelemetriaHistorica({ desde, hasta, nodoId, limit = 500 } = {}) {
-  const params = new URLSearchParams();
-  
-  if (nodoId) params.append("node_id", nodoId);
-  if (desde) params.append("desde", desde);
-  if (hasta) params.append("hasta", hasta);
-  if (limit) params.append("limit", String(limit));
+export const getTelemetriaHistorica = ({ desde, hasta, nodoId, limit = 500 } = {}) => {
+  const params = { limit };
+  if (nodoId) params.node_id = nodoId;
+  if (desde) params.desde = desde;
+  if (hasta) params.hasta = hasta;
 
-  const queryStr = params.toString();
-  const endpoint = `/telemetria/historico${queryStr ? `?${queryStr}` : ""}`;
-
-  return await fetchApi(endpoint);
-}
+  return api.get("/telemetria/historico", { params }).then((r) => r.data || []);
+};
 
 // --- Diagnóstico con Inferencia IA ---
 export const postDiagnostico = (data) =>
@@ -135,24 +136,13 @@ export const getHistorialTelecontrol = (limit = 50, nodoId) =>
     })
     .then((r) => r.data || []);
 
-// --- Exportación CSV server-side (Capa 3) ---
+// --- Exportación CSV ---
 export function buildExportCsvUrl({ tipo = "lecturas", nodoId, limite = 1000 } = {}) {
-  let apiBase =
-    import.meta.env.VITE_API_BASE_URL ||
-    "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
-
-  // Asegurar que comience con https://
-  if (!apiBase.startsWith("http://") && !apiBase.startsWith("https://")) {
-    apiBase = `https://${apiBase}`;
-  }
-
-  // Eliminar barra al final si existe
-  apiBase = apiBase.replace(/\/+$/, "");
-
+  const base = obtenerBaseUrl();
   const params = new URLSearchParams({ tipo, limit: String(limite) });
   if (nodoId) params.append("nodo_id", nodoId);
 
-  return `${apiBase}/export/csv?${params.toString()}`;
+  return `${base}/export/csv?${params.toString()}`;
 }
 
 // --- Health Check ---
