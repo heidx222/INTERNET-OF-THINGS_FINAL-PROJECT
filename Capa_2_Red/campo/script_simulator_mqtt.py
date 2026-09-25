@@ -54,6 +54,9 @@ def transmitir_historico(velocidad_delay=0.01):
         sys.exit(1)
 
     client.loop_start()
+    print(f"[PROCESO] Esperando estabilización de conexión MQTT...")
+    time.sleep(2.0)
+
     print(f"[PROCESO] Iniciando transmisión desde: {CSV_FILE}")
 
     try:

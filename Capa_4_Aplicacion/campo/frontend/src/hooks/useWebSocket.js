@@ -2,15 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 /**
  * Hook genérico de conexión WebSocket con reconexión automática
- * (backoff fijo de 3s) y parseo seguro de JSON.
- *
- * Usado para conectar contra los dos canales expuestos por el
- * microservicio FastAPI (Capa 3 - Soporte a Servicios):
- *   - /ws/telemetria → lecturas fusionadas con diagnóstico de IA
- *   - /ws/alertas    → alertas clasificadas por severidad
- *
- * @param {string} path - Ruta del WebSocket (ej. "/ws/telemetria")
- * @param {(data: any) => void} onMessage - Callback ante cada mensaje válido
+ * para el microservicio FastAPI (Capa 3).
  */
 export function useWebSocket(path, onMessage) {
   const [connected, setConnected] = useState(false);
@@ -18,38 +10,44 @@ export function useWebSocket(path, onMessage) {
   const reconnectTimer = useRef(null);
   const onMessageRef = useRef(onMessage);
 
-  // Mantener actualizado el callback sin forzar re-suscripciones
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
   const connect = useCallback(() => {
-    // 1. Obtener la URL base
-    const apiBase = import.meta.env.VITE_API_BASE_URL || "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
+    // 1. Obtener la URL base desde las variables de entorno de Vite o fallback
+    let apiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL;
     
-    // 2. Convertir correctamente http/https a ws/wss
-    let wsBaseUrl = apiBase.startsWith("https")
-      ? apiBase.replace(/^https/, "wss")
-      : apiBase.replace(/^http/, "ws");
+    // Si no hay variable definida, usamos la URL pública directa de FastAPI en Railway
+    if (!apiBase) {
+      apiBase = "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
+    }
 
-    // Limpiar diagonal final si la URL la tiene para evitar '//ws/'
+    // 2. Convertir http/https a ws/wss
+    let wsBaseUrl = apiBase
+      .replace(/^https:\/\//, "wss://")
+      .replace(/^http:\/\//, "ws://");
+
+    // Limpiar diagonales al final para evitar URLs como wss://domain.com//ws/telemetria
     if (wsBaseUrl.endsWith("/")) {
       wsBaseUrl = wsBaseUrl.slice(0, -1);
     }
 
-    const url = `${wsBaseUrl}${path}`;
+    // Si la ruta no empieza con /, agregársela
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    const url = `${wsBaseUrl}${cleanPath}`;
 
     try {
-      // Limpiar sockets o timers previos antes de conectar
-      if (wsRef.current) {
-        wsRef.current.close();
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        return; // Ya hay una conexión activa o conectando
       }
 
+      console.log(`[WS INTENTANDO CONEXIÓN] -> ${url}`);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log(`[WS CONNECTED] Canal: ${path}`);
+        console.log(`[WS CONECTADO] -> ${url}`);
         setConnected(true);
       };
 
@@ -58,27 +56,29 @@ export function useWebSocket(path, onMessage) {
           const data = JSON.parse(event.data);
           onMessageRef.current?.(data);
         } catch (e) {
-          // Ignorar mensajes no-JSON (heartbeats, etc.)
+          // Ignorar mensajes no-JSON
         }
       };
 
       ws.onclose = () => {
         setConnected(false);
-        // Intentar reconexión limpia tras 3 segundos
+        wsRef.current = null;
         reconnectTimer.current = setTimeout(() => {
           connect();
-        }, 3000);
+        }, 4000);
       };
 
       ws.onerror = (err) => {
-        console.error(`[WS ERROR] Canal ${path}:`, err);
-        ws.close();
+        console.error(`[WS ERROR] En canal ${cleanPath}:`, err);
+        if (wsRef.current) {
+          wsRef.current.close();
+        }
       };
     } catch (e) {
       console.error(`[WS EXCEPTION] Fallo al instanciar socket:`, e);
       reconnectTimer.current = setTimeout(() => {
         connect();
-      }, 3000);
+      }, 4000);
     }
   }, [path]);
 
@@ -87,7 +87,7 @@ export function useWebSocket(path, onMessage) {
     return () => {
       clearTimeout(reconnectTimer.current);
       if (wsRef.current) {
-        wsRef.current.onclose = null; // Evitar reconexión al desmontar
+        wsRef.current.onclose = null;
         wsRef.current.close();
       }
     };
