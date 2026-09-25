@@ -12,20 +12,26 @@ export function useWebSocket(path, onMessage) {
   }, [onMessage]);
 
   const connect = useCallback(() => {
-    // 1. Obtener variable o fallback de producción
-    let apiBase =
+    // 1. Obtener la variable de entorno o usar el fallback predeterminado
+    const envBase =
       import.meta.env.VITE_API_BASE_URL ||
       "internet-of-thingsfinal-project-production-80a2.up.railway.app";
 
-    // 2. Extraer ÚNICAMENTE el host/dominio limpio sin protocolos
-    let cleanDomain = apiBase
-      .replace(/^(https?:\/\/|wss?:\/\/)/, "") // remueve http://, https://, ws://, wss://
-      .replace(/\/+$/, "");                  // remueve barras al final
+    // 2. Extraer solo la ruta final (ej. /ws/telemetria o /ws/alertas) sin importar lo que venga en 'path'
+    let cleanPath = path || "";
+    if (cleanPath.includes("/ws/")) {
+      cleanPath = "/ws/" + cleanPath.split("/ws/")[1];
+    } else if (!cleanPath.startsWith("/")) {
+      cleanPath = `/${cleanPath}`;
+    }
 
-    cleanDomain = cleanDomain.split("/")[0]; // asegura quedarse solo con el dominio
+    // 3. Limpiar el dominio base de cualquier protocolo previo
+    let cleanDomain = envBase
+      .replace(/^(https?:\/\/|wss?:\/\/)/, "")
+      .replace(/\/+$/, "");
+    cleanDomain = cleanDomain.split("/")[0];
 
-    // 3. Formar la URL WSS limpia
-    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    // 4. Formar la URL WSS limpia y bien estructurada
     const url = `wss://${cleanDomain}${cleanPath}`;
 
     try {
