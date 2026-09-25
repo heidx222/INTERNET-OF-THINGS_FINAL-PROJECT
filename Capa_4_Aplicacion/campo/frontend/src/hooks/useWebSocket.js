@@ -11,18 +11,38 @@ export function useWebSocket(path, onMessage) {
   }, [onMessage]);
 
   const connect = useCallback(() => {
-    let apiBase =
-      import.meta.env.VITE_API_BASE_URL ||
-      "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
+    // BUGFIX (Capa 4): `path` puede llegar ya como una URL ws(s):// ABSOLUTA
+    // (TelemetryContext.jsx invoca useWebSocket(`${WS_BASE_URL}/ws/telemetria`, ...)).
+    // Reconstruir SIEMPRE una base y concatenarla con `path` genera URLs
+    // duplicadas del tipo:
+    //   wss://<backend>/wss://<backend>/ws/telemetria
+    // que el servidor (uvicorn/FastAPI) rechaza en el handshake con
+    // HTTP 403 "Unexpected response code: 403" (verificado en vivo). Esto
+    // deja wsTelemetriaConectado / wsAlertasConectado en `false` para
+    // siempre y el Sidebar muestra C1/C2/C3 como OFFLINE aunque el
+    // backend, el broker MQTT y la BD estén operativos.
+    //
+    // Regla: si `path` YA es una URL ws:// o wss:// absoluta, se usa TAL
+    // CUAL. Solo si es una ruta relativa (ej. "/ws/telemetria") se
+    // construye la URL a partir de VITE_API_BASE_URL.
+    let url;
 
-    // 1. Limpiar completamente el protocolo y dejar solo el dominio
-    let cleanDomain = apiBase
-      .replace(/^https?:\/\//, "")
-      .replace(/\/+$/, "");
+    if (/^wss?:\/\//i.test(path)) {
+      url = path;
+    } else {
+      let apiBase =
+        import.meta.env.VITE_API_BASE_URL ||
+        "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
 
-    // 2. Construir la URL WSS limpia
-    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-    const url = `wss://${cleanDomain}${cleanPath}`;
+      // 1. Limpiar completamente el protocolo y dejar solo el dominio
+      let cleanDomain = apiBase
+        .replace(/^https?:\/\//, "")
+        .replace(/\/+$/, "");
+
+      // 2. Construir la URL WSS limpia
+      const cleanPath = path.startsWith("/") ? path : `/${path}`;
+      url = `wss://${cleanDomain}${cleanPath}`;
+    }
 
     try {
       if (
@@ -60,7 +80,9 @@ export function useWebSocket(path, onMessage) {
       };
 
       ws.onerror = (err) => {
-        console.error(`[WS ERROR EN CANAL] ${cleanPath}:`, err);
+        // BUGFIX: usar `url` (siempre definida) en vez de una variable que
+        // solo existía dentro de un scope condicional.
+        console.error(`[WS ERROR EN CANAL] ${url}:`, err);
         ws.close();
       };
     } catch (e) {

@@ -24,7 +24,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
-  const { wsTelemetriaConectado, wsAlertasConectado, listaNodos, alertas = [] } = useTelemetry();
+  const { wsTelemetriaConectado, wsAlertasConectado, listaNodos, alertas = [], saludGlobal } = useTelemetry();
 
   // Alertas no atendidas para la badget
   const alertasNoAtendidas = useMemo(() => {
@@ -62,7 +62,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
       capa3: { label: "C3: IA & Servidores", online: capa3Online, sub: capa3Online ? "FastAPI / BD" : "Sin Servicio" },
       capa4: { label: "C4: Interfaz", online: capa4Online, sub: capa4Online ? "En Línea" : "Sin Red" },
     };
-  }, [wsTelemetriaConectado, wsAlertasConectado, listaNodos]);
+  }, [wsTelemetriaConectado, wsAlertasConectado, listaNodos, saludGlobal]);
 
   return (
     <>
