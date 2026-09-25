@@ -51,7 +51,10 @@ export default function Historico() {
         if (!isNaN(h.getTime())) params.hasta = h.toISOString();
       }
 
+      console.log("[HISTORICO] Ejecutando consulta con parametros:", params);
       const resp = await getTelemetriaHistorica(params);
+      console.log("[HISTORICO] Respuesta del servidor:", resp);
+
       const lista = Array.isArray(resp) ? resp : resp?.datos || [];
 
       const normalizado = lista
@@ -69,7 +72,7 @@ export default function Historico() {
             tds_ppm: Number(r.tds_ppm ?? r.tds) || 0,
             ph: Number(r.ph) || 0,
             turbidez_ntu: Number(r.turbidez_ntu ?? r.turbidez) || 0,
-            es_anomalia: Boolean(r.es_anomalia || r.alerta),
+            es_anomalia: Boolean(r.es_anomalia || r.alerta || r.anomalia),
           };
         })
         .sort((a, b) => a.ts - b.ts);
@@ -84,7 +87,7 @@ export default function Historico() {
     }
   }, [desde, hasta, nodoId]);
 
-  // Carga inicial automática de datos desde PostgreSQL
+  // Cargar datos automáticamente al montar o al cambiar de nodo
   useEffect(() => {
     consultar();
   }, [nodoId]);
@@ -161,7 +164,10 @@ export default function Historico() {
 
           {(desde || hasta) && (
             <button
-              onClick={() => { setDesde(""); setHasta(""); }}
+              onClick={() => {
+                setDesde("");
+                setHasta("");
+              }}
               className="text-xs text-slate_tech-500 underline py-2"
             >
               Limpiar Fechas
