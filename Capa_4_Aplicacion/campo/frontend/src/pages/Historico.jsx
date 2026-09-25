@@ -33,19 +33,26 @@ export default function Historico() {
     setCargando(true);
     try {
       const params = {
-        nodoId: nodoId || undefined,
         limit: 500,
       };
 
+      // Pasar nodo_id solo si existe
+      if (nodoId) {
+        params.nodoId = nodoId;
+      }
+
+      // Validar y enviar desde / hasta solo si tienen valor seleccionado
       if (desde) {
-        params.desde = new Date(desde).toISOString();
+        const d = new Date(desde);
+        if (!isNaN(d.getTime())) params.desde = d.toISOString();
       }
       if (hasta) {
-        params.hasta = new Date(hasta).toISOString();
+        const h = new Date(hasta);
+        if (!isNaN(h.getTime())) params.hasta = h.toISOString();
       }
 
       const resp = await getTelemetriaHistorica(params);
-      const lista = Array.isArray(resp) ? resp : [];
+      const lista = Array.isArray(resp) ? resp : resp?.datos || [];
 
       const normalizado = lista
         .map((r) => {
