@@ -38,8 +38,8 @@
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
 // ============================================================
 // [EDITA] Red WiFi del despliegue de campo.
-#define WIFI_SSID       "Mateo"
-#define WIFI_PASS       "CHILCAY2025"
+#define WIFI_SSID       "Angeles"
+#define WIFI_PASS       "angeles123"
 
 // [EDITA] Broker Mosquitto desplegado en Railway (Capa 2).
 // Usa el host/puerto del TCP Proxy público del servicio broker-mqtt.
