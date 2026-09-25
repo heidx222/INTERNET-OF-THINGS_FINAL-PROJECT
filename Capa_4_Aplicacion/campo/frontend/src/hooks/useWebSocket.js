@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
-/**
- * Hook genérico de conexión WebSocket con reconexión automática
- * para el microservicio FastAPI (Capa 3).
- */
 export function useWebSocket(path, onMessage) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
@@ -15,39 +11,34 @@ export function useWebSocket(path, onMessage) {
   }, [onMessage]);
 
   const connect = useCallback(() => {
-    // 1. Obtener la URL base desde las variables de entorno de Vite o fallback
-    let apiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL;
-    
-    // Si no hay variable definida, usamos la URL pública directa de FastAPI en Railway
-    if (!apiBase) {
-      apiBase = "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
-    }
+    let apiBase =
+      import.meta.env.VITE_API_BASE_URL ||
+      "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
 
-    // 2. Convertir http/https a ws/wss
-    let wsBaseUrl = apiBase
-      .replace(/^https:\/\//, "wss://")
-      .replace(/^http:\/\//, "ws://");
+    // 1. Limpiar completamente el protocolo y dejar solo el dominio
+    let cleanDomain = apiBase
+      .replace(/^https?:\/\//, "")
+      .replace(/\/+$/, "");
 
-    // Limpiar diagonales al final para evitar URLs como wss://domain.com//ws/telemetria
-    if (wsBaseUrl.endsWith("/")) {
-      wsBaseUrl = wsBaseUrl.slice(0, -1);
-    }
-
-    // Si la ruta no empieza con /, agregársela
+    // 2. Construir la URL WSS limpia
     const cleanPath = path.startsWith("/") ? path : `/${path}`;
-    const url = `${wsBaseUrl}${cleanPath}`;
+    const url = `wss://${cleanDomain}${cleanPath}`;
 
     try {
-      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-        return; // Ya hay una conexión activa o conectando
+      if (
+        wsRef.current &&
+        (wsRef.current.readyState === WebSocket.OPEN ||
+          wsRef.current.readyState === WebSocket.CONNECTING)
+      ) {
+        return;
       }
 
-      console.log(`[WS INTENTANDO CONEXIÓN] -> ${url}`);
+      console.log(`[WS CONECTANDO] -> ${url}`);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log(`[WS CONECTADO] -> ${url}`);
+        console.log(`[WS CONECTADO EXITOSAMENTE] -> ${url}`);
         setConnected(true);
       };
 
@@ -56,29 +47,26 @@ export function useWebSocket(path, onMessage) {
           const data = JSON.parse(event.data);
           onMessageRef.current?.(data);
         } catch (e) {
-          // Ignorar mensajes no-JSON
+          // Ignorar mensajes no JSON
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
         setConnected(false);
         wsRef.current = null;
         reconnectTimer.current = setTimeout(() => {
           connect();
-        }, 4000);
+        }, 3000);
       };
 
       ws.onerror = (err) => {
-        console.error(`[WS ERROR] En canal ${cleanPath}:`, err);
-        if (wsRef.current) {
-          wsRef.current.close();
-        }
+        console.error(`[WS ERROR EN CANAL] ${cleanPath}:`, err);
+        ws.close();
       };
     } catch (e) {
-      console.error(`[WS EXCEPTION] Fallo al instanciar socket:`, e);
       reconnectTimer.current = setTimeout(() => {
         connect();
-      }, 4000);
+      }, 3000);
     }
   }, [path]);
 

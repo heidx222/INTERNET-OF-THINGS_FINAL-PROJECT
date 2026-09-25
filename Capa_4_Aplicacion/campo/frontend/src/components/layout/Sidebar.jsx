@@ -51,9 +51,9 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
 
     // Si llegó una lectura en los últimos 45 segundos, Capa 1 está transmitiendo
     // O si no hay timestamp válido pero hay lecturas llegando en vivo por WS
-    const capa1Online = haceCuanto < 45000 || (Boolean(wsTelemetriaConectado) && Boolean(ultimaLectura));
-    const capa2Online = Boolean(wsTelemetriaConectado) || Boolean(haceCuanto < 45000);
-    const capa3Online = Boolean(wsAlertasConectado);
+    const capa1Online = haceCuanto < 45000 || Boolean(listaNodos.length > 0);
+    const capa2Online = Boolean(wsTelemetriaConectado) || haceCuanto < 45000 || Boolean(listaNodos.length > 0);
+    const capa3Online = Boolean(wsAlertasConectado) || Boolean(saludGlobal !== null);
     const capa4Online = typeof navigator !== "undefined" ? navigator.onLine : true;
     
     return {

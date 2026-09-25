@@ -378,7 +378,7 @@ app = FastAPI(title="Motor Autonómico MAPE-K - Yaku Qhawaq", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
