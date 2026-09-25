@@ -17,8 +17,10 @@ export default {
           300: "#7FC3DD",
           200: "#BEE1EE",
           100: "#E4F3F8",
+          50: "#F2FAFD",
         },
         aqua: {
+          950: "#04362D",
           700: "#0D7C66",
           600: "#12997E",
           500: "#17B896",
@@ -27,6 +29,7 @@ export default {
           200: "#C4F1E3",
         },
         slate_tech: {
+          950: "#0C1116",
           900: "#12181F",
           800: "#1B232C",
           700: "#28323D",
@@ -36,6 +39,7 @@ export default {
           300: "#A9B2BB",
           200: "#D3D8DD",
           100: "#EEF1F3",
+          50: "#F7F9FA",
         },
         critical: "#E4483C",
         warning: "#F0A93E",

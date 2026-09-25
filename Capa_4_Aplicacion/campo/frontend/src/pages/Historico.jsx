@@ -17,7 +17,7 @@ const hace7diasIso = () => format(subDays(new Date(), 7), "yyyy-MM-dd'T'HH:mm");
  *
  * Permite al analista seleccionar un rango de fechas y un nodo,
  * consultar el histórico persistido en PostgreSQL (a través del
- * proxy `GET /api/telemetria/historico` de Node-RED → `motor_ia_chancay`),
+ * proxy `GET /telemetria/historico` del microservicio FastAPI (Capa 3)),
  * visualizar tendencias y calcular el % de salud hídrica del periodo.
  */
 /**
