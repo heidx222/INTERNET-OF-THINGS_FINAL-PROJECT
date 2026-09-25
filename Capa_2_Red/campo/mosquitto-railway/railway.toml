@@ -1,0 +1,16 @@
+# =================================================================
+# ARCHIVO: railway.toml  (Capa 2 - Broker MQTT)
+# -----------------------------------------------------------------
+# En Railway: New Service -> Deploy from GitHub repo ->
+#   Settings -> Root Directory = Capa_2_Red/campo/mosquitto-railway
+# Luego habilita un TCP Proxy público al puerto 1883 para el ESP32.
+# No tiene healthcheck HTTP (es MQTT puro).
+# =================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

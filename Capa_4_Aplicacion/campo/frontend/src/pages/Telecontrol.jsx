@@ -159,10 +159,10 @@ export default function Telecontrol() {
                 </tr>
               )}
               {historial.map((h) => {
-                const fechaValida = h.timestamp || h.ts;
+                const fechaValida = h.timestamp_registro || h.timestamp || h.ts;
                 const fechaStr = fechaValida ? format(new Date(fechaValida), "dd/MM/yyyy HH:mm:ss") : "—";
                 return (
-                  <tr key={h.id || Math.random()} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
+                  <tr key={h.id || h.comando_id || Math.random()} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
                     <td className="py-2 pr-4 whitespace-nowrap text-slate_tech-600">{fechaStr}</td>
                     <td className="py-2 pr-4 font-mono text-xs">{h.nodo_id || h.node_id}</td>
                     <td className="py-2 pr-4 capitalize">{h.actuador}</td>

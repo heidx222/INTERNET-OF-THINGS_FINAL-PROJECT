@@ -24,7 +24,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
-  const { wsTelemetriaConectado, wsAlertasConectado, telemetria, alertas = [] } = useTelemetry();
+  const { wsTelemetriaConectado, wsAlertasConectado, listaNodos, alertas = [] } = useTelemetry();
 
   // Alertas no atendidas para la badget
   const alertasNoAtendidas = useMemo(() => {
@@ -33,21 +33,13 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
 
   // EVALUACIÓN DINÁMICA DE LAS 4 CAPAS
   const capasEstado = useMemo(() => {
-    let ultimaLectura = null;
+    // Tomamos la lectura más reciente entre todos los nodos monitoreados.
+    const ultimaLectura = (listaNodos || []).reduce((acc, n) => {
+      if (!acc) return n;
+      return (n.ts || 0) > (acc.ts || 0) ? n : acc;
+    }, null);
 
-    if (Array.isArray(telemetria) && telemetria.length > 0) {
-      // Tomamos el último elemento si vienen apilados, o el primero
-      ultimaLectura = telemetria[telemetria.length - 1];
-    } else if (telemetria && typeof telemetria === "object") {
-      ultimaLectura = telemetria;
-    }
-
-    // Acepta múltiples nombres de propiedad para la marca de tiempo
-    const tsUltimo = 
-      ultimaLectura?.timestamp || 
-      ultimaLectura?.timestamp_registro || 
-      ultimaLectura?.ts || 
-      ultimaLectura?.created_at;
+    const tsUltimo = ultimaLectura?.ts;
 
     let haceCuanto = Infinity;
     if (tsUltimo) {
@@ -66,11 +58,11 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     
     return {
       capa1: { label: "C1: Campo", online: capa1Online, sub: capa1Online ? "Transmitiendo" : "Sin Lectura" },
-      capa2: { label: "C2: Gateway (Node-RED)", online: capa2Online, sub: capa2Online ? "WS Conectado" : "Desconectado" },
+      capa2: { label: "C2: Red (Broker MQTT)", online: capa2Online, sub: capa2Online ? "WS Conectado" : "Desconectado" },
       capa3: { label: "C3: IA & Servidores", online: capa3Online, sub: capa3Online ? "FastAPI / BD" : "Sin Servicio" },
       capa4: { label: "C4: Interfaz", online: capa4Online, sub: capa4Online ? "En Línea" : "Sin Red" },
     };
-  }, [wsTelemetriaConectado, wsAlertasConectado, telemetria]);
+  }, [wsTelemetriaConectado, wsAlertasConectado, listaNodos]);
 
   return (
     <>

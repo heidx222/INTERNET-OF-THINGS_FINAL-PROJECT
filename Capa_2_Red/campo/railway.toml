@@ -1,0 +1,23 @@
+# =================================================================
+# ARCHIVO: railway.toml  (Capa 2 - Red / SERVICIO SIMULADOR histórico)
+# -----------------------------------------------------------------
+# ⚠️  Este railway.toml se usa SOLO si en Railway creas el servicio del
+#     SIMULADOR con:
+#        Settings -> Root Directory   = Capa_2_Red/campo
+#        Settings -> Dockerfile Path  = Dockerfile.simulator
+#
+#     El BROKER MQTT tiene su PROPIO railway.toml y su PROPIO Root
+#     Directory (Capa_2_Red/campo/mosquitto-railway). Son dos servicios
+#     Railway independientes: no los mezcles.
+#
+# El simulador es un "worker": no expone puerto HTTP (por eso no hay
+# healthcheckPath). Lee el dataset y publica en MQTT en bucle.
+# =================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.simulator"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

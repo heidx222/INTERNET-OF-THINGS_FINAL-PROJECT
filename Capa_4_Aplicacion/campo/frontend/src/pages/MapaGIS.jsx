@@ -6,17 +6,10 @@ import Card from "../components/ui/Card.jsx";
 import SeverityBadge from "../components/ui/SeverityBadge.jsx";
 import { getNodosGIS } from "../services/api.js";
 import { useTelemetry } from "../context/TelemetryContext.jsx";
+import { CENTRO_CUENCA, RECORRIDO_RIO } from "../utils/constants.js";
 
 // Corrección estándar de rutas de iconos de Leaflet al empaquetar con Vite.
 delete L.Icon.Default.prototype._getIconUrl;
-
-const CENTRO_CUENCA = [-11.45, -76.95]; // Centro aproximado de la Cuenca Chancay-Huaral
-const RECORRIDO_RIO = [
-  [-11.30, -76.72],
-  [-11.3336, -76.7864],
-  [-11.4959, -77.2072],
-  [-11.5744, -77.2694],
-];
 
 function colorPorEstado(lectura) {
   if (!lectura) return "#7C8894"; // gris técnico (sin datos)
@@ -64,10 +57,10 @@ export default function MapaGIS() {
             <Polyline positions={RECORRIDO_RIO} pathOptions={{ color: "#1A83AC", weight: 3, opacity: 0.6, dashArray: "6 6" }} />
 
             {nodosGIS.map((n) => {
-              const lecturaViva = nodos[n.nodo_id] || n.ultima_lectura;
+              const lecturaViva = nodos[n.id] || n.ultima_lectura;
               return (
                 <CircleMarker
-                  key={n.nodo_id}
+                  key={n.id}
                   center={[n.lat, n.lng]}
                   radius={12}
                   pathOptions={{
@@ -80,7 +73,7 @@ export default function MapaGIS() {
                   <Popup>
                     <div className="text-sm space-y-1 min-w-[200px]">
                       <p className="font-bold text-slate_tech-900">{n.nombre}</p>
-                      <p className="text-xs text-slate_tech-500 font-mono">{n.nodo_id}</p>
+                      <p className="text-xs text-slate_tech-500 font-mono">{n.id}</p>
                       <p className="text-xs">
                         Estado infraestructura:{" "}
                         <span className="font-semibold">{n.estado_infraestructura}</span>

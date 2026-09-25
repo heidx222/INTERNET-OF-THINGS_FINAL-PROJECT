@@ -58,18 +58,20 @@ export default function Historico() {
       });
       const normalizado = (Array.isArray(resp) ? resp : [])
         .map((r) => {
-          const rawTime = r.ts || r.timestamp_registro || r.timestamp || r.created_at;
+          const rawTime = r.created_at || r.timestamp_registro || r.timestamp_ms || r.ts;
           const parsedTime = rawTime ? new Date(rawTime).getTime() : Date.now();
 
           return {
             ...r,
             ts: isNaN(parsedTime) ? Date.now() : parsedTime,
+            nodo_id: r.node_id || r.nodo_id,
             nivel_m: Number(r.nivel_m ?? r.nivel) || 0,
+            temp_ambiente_c: Number(r.temp_ambiente_c) || 0,
             temp_agua_c: Number(r.temp_agua_c ?? r.temp_agua) || 0,
             tds_ppm: Number(r.tds_ppm ?? r.tds) || 0,
             ph: Number(r.ph) || 0,
             turbidez_ntu: Number(r.turbidez_ntu ?? r.turbidez) || 0,
-            es_anomalia: Boolean(r.es_anomalia || r.anomalia),
+            es_anomalia: Boolean(r.es_anomalia || r.alerta || r.anomalia),
           };
         })
         .sort((a, b) => a.ts - b.ts);

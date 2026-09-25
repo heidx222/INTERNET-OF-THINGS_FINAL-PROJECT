@@ -44,18 +44,34 @@ nivel_m[6660:6900] -= 0.90
 # Si hay un huayco, la turbidez se dispara brutalmente a > 500 NTU
 turbidez_ntu[6660:6900] += 600.0
 
+# 3.b REDONDEO PREVIO AL ETIQUETADO (Consistencia Interna del Gemelo Digital)
+# Las variables se exportan redondeadas al CSV. Si etiquetáramos con la
+# precisión completa, un valor como 0.3999 (inundación) quedaría exportado como
+# 0.40 y, al reevaluarse en el motor (Capa 3) o el ESP32 (Capa 1), dejaría de
+# cruzarse el umbral -> 1 registro de inconsistencia. Redondeamos ANTES de
+# calcular las etiquetas para que el dataset sea autoconsistente.
+tds_ppm       = np.round(tds_ppm, 1)
+ph            = np.round(ph, 2)
+turbidez_ntu  = np.round(turbidez_ntu, 1)
+temp_agua_c   = np.round(temp_agua_c, 1)
+temp_ambiente_c = np.round(temp_ambiente_c, 1)
+nivel_m       = np.round(nivel_m, 2)
+
 # 4. GEMELO LÓGICO: Determinación determinística de alertas (Cero Redundancia)
 # Replicamos de forma exacta los umbrales e histéresis de verificarAlertas() del ESP32
+# y del motor MAPE-K de la Capa 3 (MapekEngine.evaluate_mapek_state). Mantener
+# estos tres puntos sincronizados garantiza un pipeline coherente de extremo a extremo.
 TDS_UMBRAL_ALTO = 500.0
-NIVEL_UMBRAL_ALTO = 0.40  # Peligro si el puente está a menos de 40 cm del agua (en metros)
-# Para la simulación simplificada usaremos condiciones lógicas directas sobre los vectores:
+PH_MIN, PH_MAX = 6.5, 8.5
+NIVEL_UMBRAL_ALTO = 0.40    # Peligro si el puente está a menos de 40 cm del agua (en metros)
+NIVEL_UMBRAL_DESBORDE = 3.50  # Peligro si el nivel supera el cauce (desborde)
 
 alerta = []
 estado_mapek = []
 
 for i in range(total_registros):
-    es_contaminacion = tds_ppm[i] > TDS_UMBRAL_ALTO
-    es_inundacion = nivel_m[i] < NIVEL_UMBRAL_ALTO
+    es_contaminacion = (tds_ppm[i] > TDS_UMBRAL_ALTO) or (ph[i] < PH_MIN) or (ph[i] > PH_MAX)
+    es_inundacion = (nivel_m[i] < NIVEL_UMBRAL_ALTO) or (nivel_m[i] > NIVEL_UMBRAL_DESBORDE)
 
     if es_contaminacion and es_inundacion:
         alerta.append(True)
@@ -76,12 +92,12 @@ df = pd.DataFrame({
     'node_id': "nodo_chancay_01",
     'origen': "sintetico",
     'timestamp_ms': [int((fecha_inicio + timedelta(minutes=i)).timestamp() * 1000) for i in range(total_registros)],
-    'tds_ppm': np.round(tds_ppm, 1),
-    'ph': np.round(ph, 2),              
-    'turbidez_ntu': np.round(turbidez_ntu, 1),  
-    'temp_agua_c': np.round(temp_agua_c, 1),
-    'temp_ambiente_c': np.round(temp_ambiente_c, 1),
-    'nivel_m': np.round(nivel_m, 2),
+    'tds_ppm': tds_ppm,
+    'ph': ph,
+    'turbidez_ntu': turbidez_ntu,
+    'temp_agua_c': temp_agua_c,
+    'temp_ambiente_c': temp_ambiente_c,
+    'nivel_m': nivel_m,
     'alerta': alerta,
     'estado_mapek': estado_mapek
 })

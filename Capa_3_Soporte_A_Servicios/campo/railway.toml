@@ -1,0 +1,18 @@
+# =================================================================
+# ARCHIVO: railway.toml  (Capa 3 - Soporte a Servicios)
+# -----------------------------------------------------------------
+# Despliegue del microservicio FastAPI (motor MAPE-K + Isolation Forest).
+# En Railway: New Service -> Deploy from GitHub repo ->
+#   Settings -> Root Directory = Capa_3_Soporte_A_Servicios/campo
+# Las credenciales/URLs se definen en la pestaña "Variables" (ver .env.example).
+# =================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
