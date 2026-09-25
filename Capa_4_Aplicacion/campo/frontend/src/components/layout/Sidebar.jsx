@@ -213,7 +213,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
                   <a href="https://linkedin.com/in/juana-angeles-seclen" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
                     Angeles Seclen, Juana Agripina
                   </a>
-                  <a href="https://linkedin.com/in/" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
+                  <a href="https://linkedin.com/in/camila-del-rosario-bada-watanave" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
                     Bada Watanave, Camila del Rosario
                   </a>
                   <a href="https://linkedin.com/in/heidy-carhuaricra-anco" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
