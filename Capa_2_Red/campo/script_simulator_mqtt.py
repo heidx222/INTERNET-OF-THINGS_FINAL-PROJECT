@@ -20,7 +20,10 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", 28182))
 MQTT_USER = os.getenv("MQTT_USER", "simulador_python")
 MQTT_PASS = os.getenv("MQTT_PASS", "simulador123")
 
-MQTT_TOPIC_HISTORICO = os.getenv("MQTT_TOPIC", "chancay/cuenca/telemetria")
+# Tópico histórico de la cuenca. Debe pertenecer al prefijo `chancay/cuenca/#`
+# para que sea visible a la ACL de escritura del simulador (Capa 2 -> MQTT ->
+# Capa 3) y consumido por el listener `chancay/cuenca/#` del backend FastAPI.
+MQTT_TOPIC_HISTORICO = os.getenv("MQTT_TOPIC", "chancay/cuenca/historico")
 CSV_FILE = os.getenv("CSV_FILE", "dataset_sintetico_chancay.csv")
 
 def conectar_broker():

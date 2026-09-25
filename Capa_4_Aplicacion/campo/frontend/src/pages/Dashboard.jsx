@@ -34,7 +34,15 @@ export default function Dashboard() {
     let activo = true;
     getSerieTemporal(nodoSeleccionado, 200)
       .then((resp) => {
-        if (activo) setSerieInicial(resp?.datos || []);
+        if (!activo) return;
+        // La Capa 3 devuelve un array plano de lecturas (no un objeto {datos}).
+        const lista = Array.isArray(resp) ? resp : resp?.datos || [];
+        const normalizada = lista.map((d) => {
+          const rawTs = d.created_at || d.timestamp_registro || d.timestamp_ms || d.ts;
+          const parsed = rawTs ? new Date(rawTs).getTime() : Date.now();
+          return { ...d, ts: isNaN(parsed) ? Date.now() : parsed };
+        });
+        setSerieInicial(normalizada);
       })
       .catch(() => {});
     return () => {

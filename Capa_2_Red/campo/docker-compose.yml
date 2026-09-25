@@ -1,0 +1,55 @@
+version: '3.8'
+
+# =================================================================
+# PROYECTO: Sistema IoT Autónomo - Cuenca Chancay-Huaral (Yaku Qhawaq)
+# ARCHIVO:  docker-compose.yml  (Capa 2 - Red, despliegue de CAMPO)
+# -----------------------------------------------------------------
+# Levanta la infraestructura mínima de red de la cuenca:
+#   - db_postgres : identidad MQTT (Go Auth) + datos de la cuenca
+#   - mosquitto   : broker MQTT con autenticación PostgreSQL/Bcrypt
+# El simulador histórico (script_simulator_mqtt.py) se ejecuta aparte,
+# contra el broker publicado en localhost:1883.
+# =================================================================
+
+services:
+  db_postgres:
+    image: postgres:13-alpine
+    container_name: bd_chancay_campo
+    environment:
+      POSTGRES_DB: chancayhuaral_auth
+      POSTGRES_USER: adminChancayHuaral
+      POSTGRES_PASSWORD: adminChancayHuaral123
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adminChancayHuaral -d chancayhuaral_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: iegomez/mosquitto-go-auth:latest
+    container_name: broker_chancay_campo
+    depends_on:
+      db_postgres:
+        condition: service_healthy
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/etc/mosquitto/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+    networks:
+      - iot_network
+
+networks:
+  iot_network:
+    driver: bridge
+
+volumes:
+  mosquitto_data:
+  postgres_data:

@@ -1,0 +1,25 @@
+# =================================================================
+# PROYECTO: Sistema IoT Autónomo - Cuenca Chancay-Huaral (Yaku Qhawaq)
+# ARCHIVO:  Dockerfile.simulator  (Capa 2 - Red / Simulador histórico)
+# DESTINO:  Railway (servicio tipo "worker", sin puerto HTTP)
+# -----------------------------------------------------------------
+# Contexto de build = Capa_2_Red/campo
+# En Railway: Settings -> Root Directory = Capa_2_Red/campo
+#             Dockerfile Path     = Dockerfile.simulator
+# =================================================================
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Script + dataset del Gemelo Digital (ruta por defecto del script)
+COPY script_simulator_mqtt.py .
+COPY dataset_sintetico_chancay.csv .
+
+CMD ["python", "script_simulator_mqtt.py"]

@@ -1,0 +1,9 @@
+-- =================================================================
+-- NOTA: el esquema canónico de autenticación MQTT y de datos de la
+-- cuenca vive en `../postgres/init.sql`.
+--
+-- Este archivo se conserva únicamente porque herramientas anteriores
+-- referenciaban la ruta `mosquitto-railway/init.sql`. NO duplicar el
+-- esquema aquí: mantener una sola fuente de verdad evita que las ACL y
+-- los hashes de las credenciales se desincronicen entre entornos.
+-- =================================================================

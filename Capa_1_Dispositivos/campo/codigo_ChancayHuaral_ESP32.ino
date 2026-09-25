@@ -4,6 +4,24 @@
 // CAPA:         1 — Dispositivos (ITU-T Y.2060)
 // ARQUITECTURA: 4 Capas ITU-T | Computación Autonómica (Loop MAPE-K)
 // SEGURIDAD:    Metodología STRIDE
+// ARCHIVO:      codigo_ChancayHuaral_ESP32.ino  (VERSIÓN CAMPO)
+// ============================================================
+//
+// FLUJO BIDIRECCIONAL (Capa 1 <-> Capa 4):
+//   SENSORES -> ESP32 (MAPE-K edge) -> Wi-Fi -> MQTT
+//     Publishes : chancay/cuenca/tiempo_real/nodo_chancay_01   (telemetría)
+//     Subscribes: chancay/actuadores/alerta/nodo_chancay_01    (lazo MAPE-K)
+//                 chancay/actuadores/comando/nodo_chancay_01   (telecontrol Capa 4)
+//
+// CAMBIOS CLAVE RESPECTO DE LA VERSIÓN DE LABORATORIO:
+//   1. timestamp_ms ahora es epoch real (NTP sincronizado), no millis().
+//   2. Se suscribe a AMBOS canales de actuador (alerta + comando).
+//   3. Parseo de comandos corregido: "DESACTIVAR" contiene "ACTIVAR", por lo
+//      que el orden de evaluación anterior activaba la sirena al desactivar.
+//   4. La credencial MQTT del nodo coincide con la ACL de la Capa 2
+//      (usuario `nodo_chancay_01`).
+//   5. El payload incluye `alerta` y `estado_mapek` locales para mantener
+//      paridad determinística con el gemelo de datos de la Capa 2.
 // ============================================================
 
 #include <Wire.h>
@@ -14,6 +32,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <esp_task_wdt.h>
+#include <time.h>
 
 // ============================================================
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
@@ -22,17 +41,24 @@
 #define WIFI_PASS       "AL1BA4TE&T3"
 
 // Broker Mosquitto desplegado en Railway (Capa 2)
-#define MQTT_SERVER     "iriguchi.proxy.rlwy.net"     
+#define MQTT_SERVER     "iriguchi.proxy.rlwy.net"
 #define MQTT_PORT       28182
-#define MQTT_USER       "adminChancayHuaral"
-#define MQTT_PASS       "adminChancayHuaral123" 
+// Credencial del nodo definida en la ACL de la Capa 2 (postgres/init.sql).
+// Contraseña en claro de desarrollo: nodoChancay01.
+#define MQTT_USER       "nodo_chancay_01"
+#define MQTT_PASS       "nodoChancay01"
 #define MQTT_CLIENT_ID  "ESP32_Nodo_Chancay_01"
 
 #define NODO_ID         "nodo_chancay_01"
-#define MQTT_TOPIC_PUB  "chancay/cuenca/tiempo_real/nodo_chancay_01" 
-#define MQTT_TOPIC_SUB  "chancay/actuadores/alerta/nodo_chancay_01"
+#define MQTT_TOPIC_PUB  "chancay/cuenca/tiempo_real/nodo_chancay_01"
+#define MQTT_TOPIC_SUB_ALERTA  "chancay/actuadores/alerta/nodo_chancay_01"
+#define MQTT_TOPIC_SUB_COMANDO "chancay/actuadores/comando/nodo_chancay_01"
 
 #define WDT_TIMEOUT_SEG 30 // Watchdog timer de seguridad
+
+// Zona horaria de Perú (UTC-5, sin horario de verano). Usado para NTP.
+#define NTP_GMT_OFFSET_S  -18000
+#define NTP_DST_OFFSET_S  0
 
 // ============================================================
 // ASIGNACIÓN DE PINES (ESP32)
@@ -41,7 +67,7 @@
 #define PIN_DS18B20   4
 #define PIN_DHT11    15
 #define PIN_TDS      32
-#define PIN_PH       34  
+#define PIN_PH       34
 #define PIN_TURBIDEZ 35
 #define TRIG_PIN      5
 #define ECHO_PIN     18
@@ -77,12 +103,14 @@ float turbidezValue       = -999.0;
 // Estado autonómico local
 bool   alertaCritica  = false;
 String mensajeAlerta  = "SISTEMA OPTIMO";
-int    tipoEmergencia = 0;
+int    tipoEmergencia = 0;   // 0 normal | 1 contaminación | 2 inundación | 3 crítico
 
-// Umbrales de Histéresis Local
+// Umbrales de Histéresis Local (alineados con Capa 2 y Capa 3)
 #define TDS_UMBRAL_ALTO   500.0   // ppm
 #define TDS_UMBRAL_BAJO   450.0   // ppm
-#define NIVEL_UMBRAL_ALTO  40.0   // cm (Distancia corta = agua alta)
+#define PH_MIN            6.5
+#define PH_MAX            8.5
+#define NIVEL_UMBRAL_ALTO  40.0   // cm (distancia corta = agua alta)
 #define NIVEL_UMBRAL_BAJO  50.0   // cm
 
 // Calibración pH
@@ -93,11 +121,11 @@ int    tipoEmergencia = 0;
 unsigned long lastLCDUpdate    = 0;
 unsigned long lastAlertaBuzzer = 0;
 unsigned long lastTdsSample    = 0;
-unsigned long lastPhSample     = 0; 
+unsigned long lastPhSample     = 0;
 unsigned long lastTurbSample   = 0;
 unsigned long lastMqttPublish  = 0;
 unsigned long lastSerialPrint  = 0;
-unsigned long lastReconnect    = 0; 
+unsigned long lastReconnect    = 0;
 unsigned long reconnectInterval = 2000;
 
 // Variables para lectura asíncrona del DS18B20
@@ -115,6 +143,16 @@ int pantallaActual = 0;
 bool modoFailsafeLocal = false;
 
 // ============================================================
+// FECHA/HORA REAL (NTP) — para timestamp_ms coherente con el backend
+// ============================================================
+uint64_t epochMsActual() {
+  time_t now = time(nullptr);
+  // Mientras NTP no sincroniza, time() devuelve un valor cercano a 0.
+  if (now < 1600000000) return (uint64_t)millis(); // fallback: uptime ms
+  return (uint64_t)now * 1000ULL;
+}
+
+// ============================================================
 // CALLBACK MQTT: TELECONTROL Y COMANDOS DESDE CAPA 3 Y 4
 // ============================================================
 void callbackMQTT(char* topic, byte* payload, unsigned int length) {
@@ -122,23 +160,27 @@ void callbackMQTT(char* topic, byte* payload, unsigned int length) {
   for (unsigned int i = 0; i < length; i++) {
     mensaje += (char)payload[i];
   }
-  
-  Serial.print("[TELECONTROL MQTT] Comando recibido desde la nube: ");
+
+  Serial.print("[TELECONTROL MQTT] Comando recibido en ");
+  Serial.print(topic);
+  Serial.print(": ");
   Serial.println(mensaje);
 
-  // Procesamiento de comandos enviados por FastAPI/Dashboard (Capa 3 y 4)
-  if (mensaje.indexOf("ACTIVAR") >= 0 || mensaje.indexOf("CRITICA") >= 0) {
-    alertaCritica = true;
-    tipoEmergencia = 2;
-    mensajeAlerta = "ALERTA REMOTA IA";
-    Serial.println("[ACTUADOR] Sirena y compuerta activadas por lazo MAPE-K central.");
-  }
-  else if (mensaje.indexOf("DESACTIVAR") >= 0 || mensaje.indexOf("CONFIRMAR") >= 0 || mensaje.indexOf("DESPEJAR") >= 0) {
+  // IMPORTANTE: evaluamos "DESACTIVAR" ANTES que "ACTIVAR", porque la cadena
+  // "DESACTIVAR" CONTIENE la subcadena "ACTIVAR" (bug del laboratorio).
+  if (mensaje.indexOf("DESACTIVAR") >= 0 || mensaje.indexOf("DESPEJAR") >= 0 ||
+      mensaje.indexOf("NORMAL") >= 0 || mensaje.indexOf("CONFIRMAR") >= 0) {
     alertaCritica = false;
     tipoEmergencia = 0;
     mensajeAlerta = "SISTEMA OPTIMO";
     digitalWrite(PIN_BUZZER, LOW);
-    Serial.println("[ACTUADOR] Alerta despejada desde el Dashboard.");
+    Serial.println("[ACTUADOR] Alerta despejada (orden remota de Capa 3/4).");
+  }
+  else if (mensaje.indexOf("ACTIVAR") >= 0 || mensaje.indexOf("CRITICA") >= 0) {
+    alertaCritica = true;
+    tipoEmergencia = 2;
+    mensajeAlerta = "ALERTA REMOTA IA";
+    Serial.println("[ACTUADOR] Sirena y compuerta activadas por el lazo MAPE-K central.");
   }
 }
 
@@ -150,7 +192,7 @@ void setup() {
   randomSeed(analogRead(0));
 
   Serial.println("\n========================================");
-  Serial.println(" YAKU QHAWAQ - CAPA 1 DISPOSITIVO");
+  Serial.println(" YAKU QHAWAQ - CAPA 1 DISPOSITIVO (CAMPO)");
   Serial.println(" Cuenca Chancay-Huaral");
   Serial.println("========================================\n");
 
@@ -175,11 +217,12 @@ void setup() {
   lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Yaku Qhawaq v2.0");
+  lcd.print("Yaku Qhawaq v2.1");
   lcd.setCursor(0, 1);
   lcd.print("Conectando...");
 
   setup_wifi();
+  configTime(NTP_GMT_OFFSET_S, NTP_DST_OFFSET_S, "pool.ntp.org", "time.nist.gov");
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callbackMQTT);
 
@@ -202,14 +245,14 @@ void loop() {
 
   // 1. MONITOR (Captura de sensores)
   leerTemperaturaDS18B20();
-  leerDHT11();   
+  leerDHT11();
   leerTDSAsincrono();
   leerPHAsincrono();
   leerTurbidezAsincrono();
   leerDistanciaJSN_NoBloqueante();
 
   // 2. ANALYZE (Failsafe local con histéresis)
-  verificarAlertas();   
+  verificarAlertas();
 
   // 3. EXECUTE LOCAL (LCD)
   if (millis() - lastLCDUpdate >= 2000) {
@@ -230,7 +273,7 @@ void loop() {
   }
 
   // ACTUACIÓN SONORA
-  ejecutarBuzzerAutonomo(); 
+  ejecutarBuzzerAutonomo();
 
   delay(10);
 }
@@ -273,7 +316,9 @@ void reconnect_autonomo() {
   Serial.print("[MQTT] Conectando al broker "); Serial.print(MQTT_SERVER); Serial.print("...");
   if (client.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
     Serial.println(" OK!");
-    client.subscribe(MQTT_TOPIC_SUB); // Suscripción al canal de telecontrol
+    // Suscripción al canal de alertas (lazo MAPE-K) y al de telecontrol (Capa 4)
+    client.subscribe(MQTT_TOPIC_SUB_ALERTA);
+    client.subscribe(MQTT_TOPIC_SUB_COMANDO);
     reconnectInterval = 2000;
     modoFailsafeLocal = false;
   } else {
@@ -289,37 +334,44 @@ void reconnect_autonomo() {
 void publicarDatosRed() {
   if (!client.connected()) return;
 
-  // Adaptación de variables para el esquema Pydantic
-  float p_nivel_m  = (distanciaNivel > 0) ? (distanciaNivel / 100.0) : 1.25; 
-  float p_temp_amb = (temperaturaAmbiente != -999.0) ? temperaturaAmbiente : (21.5 + random(-1, 2));
-  float p_temp_agua = (temperaturaAgua != -999.0) ? temperaturaAgua : (19.2 + (random(-5, 5)/10.0));
-  float p_tds      = (tdsValue > 0) ? tdsValue : (230.0 + random(-10, 10));
-  float p_ph       = (phValue != -999.0) ? phValue : (7.40 + (random(-5, 5) / 100.0));
-  float p_turb     = (turbidezValue != -999.0) ? turbidezValue : (12.5 + random(-2, 3));
-  
-  unsigned long timestamp_ms = millis();
+  // Adaptación de variables para el esquema Pydantic (SensorData)
+  float p_nivel_m   = (distanciaNivel > 0) ? (distanciaNivel / 100.0) : 1.25;
+  float p_temp_amb  = (temperaturaAmbiente != -999.0) ? temperaturaAmbiente : (21.5 + random(-1, 2));
+  float p_temp_agua = (temperaturaAgua != -999.0) ? temperaturaAgua : (19.2 + (random(-5, 5) / 10.0));
+  float p_tds       = (tdsValue > 0) ? tdsValue : (230.0 + random(-10, 10));
+  float p_ph        = (phValue != -999.0) ? phValue : (7.40 + (random(-5, 5) / 100.0));
+  float p_turb      = (turbidezValue != -999.0) ? turbidezValue : (12.5 + random(-2, 3));
 
-  char payload[320];
+  // Estado MAPE-K local (paridad con el gemelo de datos de la Capa 2)
+  int p_estado_mapek = tipoEmergencia;      // 0..3
+  int p_alerta       = alertaCritica ? 1 : 0;
+  uint64_t ts_ms     = epochMsActual();
+
+  char payload[384];
   snprintf(payload, sizeof(payload),
     "{"
       "\"node_id\":\"%s\","
       "\"origen\":\"ESP32_CAMPO\","
-      "\"timestamp_ms\":%lu,"
+      "\"timestamp_ms\":%llu,"
       "\"nivel_m\":%.2f,"
       "\"temp_ambiente_c\":%.1f,"
       "\"temp_agua_c\":%.1f,"
       "\"tds_ppm\":%.1f,"
       "\"ph\":%.2f,"
-      "\"turbidez_ntu\":%.1f"
+      "\"turbidez_ntu\":%.1f,"
+      "\"alerta\":%s,"
+      "\"estado_mapek\":%d"
     "}",
     NODO_ID,
-    timestamp_ms,
-    p_nivel_m, 
-    p_temp_amb, 
-    p_temp_agua, 
-    p_tds, 
-    p_ph, 
-    p_turb
+    (unsigned long long)ts_ms,
+    p_nivel_m,
+    p_temp_amb,
+    p_temp_agua,
+    p_tds,
+    p_ph,
+    p_turb,
+    p_alerta ? "true" : "false",
+    p_estado_mapek
   );
 
   bool ok = client.publish(MQTT_TOPIC_PUB, payload);
@@ -353,10 +405,9 @@ void leerTemperaturaDS18B20() {
 }
 
 void leerDHT11() {
-  // Variable estática para recordar el último tiempo sin declararla arriba
   static unsigned long lastDHTSample = 0;
 
-  // Solo leemos el DHT11 cada 2000 ms (2 segundos) para no saturarlo
+  // Solo leemos el DHT11 cada 2000 ms para no saturarlo
   if (millis() - lastDHTSample >= 2000) {
     lastDHTSample = millis();
 
@@ -445,13 +496,16 @@ void verificarAlertas() {
   if (!alertaNivel && distanciaNivel > 0.0 && distanciaNivel < NIVEL_UMBRAL_ALTO) alertaNivel = true;
   else if (alertaNivel && (distanciaNivel < 0.0 || distanciaNivel > NIVEL_UMBRAL_BAJO)) alertaNivel = false;
 
-  if (alertaNivel) {
-    alertaCritica  = true; tipoEmergencia = 2; mensajeAlerta  = "ALERTA: INUNDAC.";
+  if (alertaNivel && alertaTDS) {
+    alertaCritica = true;  tipoEmergencia = 3; mensajeAlerta = "CRITICO DOBLE";
+  } else if (alertaNivel) {
+    alertaCritica = true;  tipoEmergencia = 2; mensajeAlerta = "ALERTA: INUNDAC.";
   } else if (alertaTDS) {
-    alertaCritica  = true; tipoEmergencia = 1; mensajeAlerta  = "ALERTA: TDS ALTO";
+    alertaCritica = true;  tipoEmergencia = 1; mensajeAlerta = "ALERTA: TDS ALTO";
   } else {
+    // No sobrescribir una alerta remota mientras el operador no la despeje.
     if (mensajeAlerta != "ALERTA REMOTA IA") {
-      alertaCritica  = false; tipoEmergencia = 0; mensajeAlerta  = "SISTEMA OPTIMO";
+      alertaCritica = false; tipoEmergencia = 0; mensajeAlerta = "SISTEMA OPTIMO";
     }
   }
 }
@@ -500,7 +554,7 @@ void actualizarLCD() {
       lcd.print(client.connected() ? "MQTT: ONLINE" : "MQTT: OFFLINE");
       break;
 
-    case 3: // RECUPERADA: Pantalla para el DHT11
+    case 3:
       lcd.setCursor(0, 0); lcd.print("T.Amb: ");
       if (temperaturaAmbiente != -999.0) { lcd.print(temperaturaAmbiente, 1); lcd.print("C"); }
       else { lcd.print("21.5C"); }
@@ -510,7 +564,7 @@ void actualizarLCD() {
       break;
   }
 
-  pantallaActual = (pantallaActual + 1) % 4; // Cambiado a 4 para incluir el case 3
+  pantallaActual = (pantallaActual + 1) % 4;
 }
 
 void ejecutarBuzzerAutonomo() {
@@ -519,14 +573,15 @@ void ejecutarBuzzerAutonomo() {
     return;
   }
 
-  unsigned long intervalo = (tipoEmergencia == 2) ? 150 : 500;
+  // Patrón más rápido para inundación/doble falla, más lento para contaminación.
+  unsigned long intervalo = (tipoEmergencia >= 2) ? 150 : 500;
   if (millis() - lastAlertaBuzzer >= intervalo) {
     lastAlertaBuzzer = millis();
     digitalWrite(PIN_BUZZER, !digitalRead(PIN_BUZZER));
   }
 }
 
-  void imprimirSerial() {
+void imprimirSerial() {
   Serial.println("========================================");
   Serial.print("NODO ID          : "); Serial.println(NODO_ID);
   Serial.print("ESTADO           : "); Serial.println(mensajeAlerta);
