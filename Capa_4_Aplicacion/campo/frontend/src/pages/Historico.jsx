@@ -144,7 +144,7 @@ export default function Historico() {
             <NodeSelector value={nodoId} onChange={setNodoId} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate_tech-500 mb-1">Desde</label>
+            <label className="block text-xs font-medium text-slate_tech-500 mb-1">Desde (Opcional)</label>
             <input
               type="datetime-local"
               value={desde}
@@ -153,7 +153,7 @@ export default function Historico() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate_tech-500 mb-1">Hasta</label>
+            <label className="block text-xs font-medium text-slate_tech-500 mb-1">Hasta (Opcional)</label>
             <input
               type="datetime-local"
               value={hasta}
@@ -166,9 +166,18 @@ export default function Historico() {
             disabled={cargando}
             className="inline-flex items-center gap-2 bg-river-700 hover:bg-river-800 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors disabled:opacity-60"
           >
-            <Search className="w-4 h-4" />
+            {cargando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             {cargando ? "Consultando..." : "Consultar"}
           </button>
+
+          {(desde || hasta) && (
+            <button
+              onClick={() => { setDesde(""); setHasta(""); }}
+              className="text-xs text-slate_tech-500 underline py-2"
+            >
+              Limpiar Fechas
+            </button>
+          )}
 
           <div className="ml-auto flex gap-2">
             <button
@@ -178,12 +187,6 @@ export default function Historico() {
             >
               <Download className="w-3.5 h-3.5" /> CSV (vista actual)
             </button>
-            <a
-              href={buildExportCsvUrl({ tipo: "lecturas", nodoId })}
-              className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-slate_tech-700 hover:bg-slate_tech-800 rounded-lg px-3 py-2 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" /> CSV (buffer en vivo)
-            </a>
           </div>
         </div>
       </Card>
@@ -217,13 +220,13 @@ export default function Historico() {
       {/* Gráficos de tendencia */}
       {datos.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card title="Tendencia: Nivel del Río" subtitle="Rango de fechas seleccionado">
+          <Card title="Tendencia: Nivel del Río" subtitle="Histórico persistido en PostgreSQL">
             <TimeSeriesChart
               data={datos}
               lines={[{ dataKey: "nivel_m", name: "Nivel (m)", color: "#1A83AC" }]}
             />
           </Card>
-          <Card title="Tendencia: pH y Turbidez" subtitle="Rango de fechas seleccionado">
+          <Card title="Tendencia: pH y Turbidez" subtitle="Histórico persistido en PostgreSQL">
             <TimeSeriesChart
               data={datos}
               lines={[
@@ -256,7 +259,7 @@ export default function Historico() {
                 <tr>
                   <td colSpan={8} className="text-center text-slate_tech-400 py-10">
                     {consultado
-                      ? "No se encontraron registros para el rango seleccionado."
+                      ? "No se encontraron registros en PostgreSQL para el filtro actual."
                       : "Realice una consulta para visualizar los registros históricos."}
                   </td>
                 </tr>
@@ -268,7 +271,7 @@ export default function Historico() {
                 .map((d, i) => (
                   <tr key={i} className="border-b border-slate_tech-100 hover:bg-slate_tech-50">
                     <td className="py-2 pr-4 text-slate_tech-600 whitespace-nowrap">
-                      {formatearFechaSegura(d.timestamp_registro || d.ts)}
+                      {formatearFechaSegura(d.created_at || d.ts)}
                     </td>
                     <td className="py-2 pr-4 font-mono text-xs">{d.nodo_id || nodoId}</td>
                     <td className="py-2 pr-4">{formatearNumero(d.nivel_m, 2)}</td>
