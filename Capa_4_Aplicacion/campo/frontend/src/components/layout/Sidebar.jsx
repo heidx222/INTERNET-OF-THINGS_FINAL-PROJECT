@@ -207,8 +207,20 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
         <div className="px-5 py-3 border-t border-slate_tech-800/80 text-[11px] text-slate_tech-500 flex items-center justify-between">
           {(!collapsed || isOpen) && (
             <>
-              <span>Chancay-Huaral v2.0</span>
-              <ShieldCheck className="w-4 h-4 text-aqua-500/70" />
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-slate_tech-400 mb-0.5">Para mayor información, contáctese a:</span>
+                <div className="flex flex-col gap-1 pl-1">
+                  <a href="https://linkedin.com/in/juana-angeles-seclen" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
+                    Angeles Seclen, Juana Agripina
+                  </a>
+                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
+                    Bada Watanave, Camila del Rosario
+                  </a>
+                  <a href="https://linkedin.com/heidy-carhuaricra-anco" target="_blank" rel="noopener noreferrer" className="hover:text-aqua-500 transition-colors flex items-center gap-1">
+                    Carhuaricra Anco, Heidy Nicole
+                  </a>
+                </div>
+              </div>
             </>
           )}
         </div>
