@@ -50,13 +50,22 @@ export default function Historico() {
   const consultar = useCallback(async () => {
     setCargando(true);
     try {
-      const resp = await getTelemetriaHistorica({
-        desde: desde ? new Date(desde).toISOString() : undefined,
-        hasta: hasta ? new Date(hasta).toISOString() : undefined,
-        nodoId,
-        limit: 1000,
-      });
-      const normalizado = (Array.isArray(resp) ? resp : [])
+      // Si el usuario especificó fechas, las convertimos a ISO; si no, enviamos undefined
+      const params = {
+        nodoId: nodoId || undefined,
+        limit: 500,
+      };
+
+      if (desde) {
+        params.desde = new Date(desde).toISOString();
+      }
+      if (hasta) {
+        params.hasta = new Date(hasta).toISOString();
+      }
+
+      const resp = await getTelemetriaHistorica(params);
+      const lista = Array.isArray(resp) ? resp : [];
+      const normalizado = lista
         .map((r) => {
           const rawTime = r.created_at || r.timestamp_registro || r.timestamp_ms || r.ts;
           const parsedTime = rawTime ? new Date(rawTime).getTime() : Date.now();
@@ -64,14 +73,14 @@ export default function Historico() {
           return {
             ...r,
             ts: isNaN(parsedTime) ? Date.now() : parsedTime,
-            nodo_id: r.node_id || r.nodo_id,
+            nodo_id: r.node_id || r.nodo_id || nodoId,
             nivel_m: Number(r.nivel_m ?? r.nivel) || 0,
             temp_ambiente_c: Number(r.temp_ambiente_c) || 0,
             temp_agua_c: Number(r.temp_agua_c ?? r.temp_agua) || 0,
             tds_ppm: Number(r.tds_ppm ?? r.tds) || 0,
             ph: Number(r.ph) || 0,
             turbidez_ntu: Number(r.turbidez_ntu ?? r.turbidez) || 0,
-            es_anomalia: Boolean(r.es_anomalia || r.alerta || r.anomalia),
+            es_anomalia: Boolean(r.es_anomalia || r.alerta),
           };
         })
         .sort((a, b) => a.ts - b.ts);
@@ -86,6 +95,11 @@ export default function Historico() {
     }
   }, [desde, hasta, nodoId]);
 
+  // Carga automática inicial al entrar a la vista /historico
+  useEffect(() => {
+    consultar();
+  }, [nodoId]);
+
   const stats = useMemo(() => {
     if (!datos || datos.length === 0) return null;
 
@@ -94,20 +108,11 @@ export default function Historico() {
     const pctAnomalias = ((anomalias / total) * 100).toFixed(1);
     const saludHidricaPct = Math.max(0, 100 - Number(pctAnomalias) * 2).toFixed(1);
 
-    const promedio = (campo) => {
-      const suma = datos.reduce((acc, d) => acc + (Number(d[campo]) || 0), 0);
-      return (suma / total).toFixed(2);
-    };
-
     return {
       totalRegistros: total,
       anomalias,
       pctAnomalias,
       saludHidricaPct,
-      nivelProm: promedio("nivel_m"),
-      phProm: promedio("ph"),
-      tdsProm: promedio("tds_ppm"),
-      turbidezProm: promedio("turbidez_ntu"),
     };
   }, [datos]);
 
@@ -115,7 +120,7 @@ export default function Historico() {
     descargarCsv(
       datos,
       [
-        { key: "timestamp_registro", header: "timestamp" },
+        { key: "ts", header: "timestamp" },
         { key: "nodo_id", header: "nodo_id" },
         { key: "nivel_m", header: "nivel_m" },
         { key: "temp_ambiente_c", header: "temp_ambiente_c" },
