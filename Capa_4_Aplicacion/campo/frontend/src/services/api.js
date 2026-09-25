@@ -129,14 +129,24 @@ export const getHistorialTelecontrol = (limit = 50, nodoId) =>
     .then((r) => r.data || []);
 
 // --- Exportación CSV server-side (Capa 3) ---
-export const buildExportCsvUrl = ({ nodoId, desde, hasta } = {}) => {
-  const params = new URLSearchParams();
-  if (nodoId) params.set("nodo_id", nodoId);
-  if (desde) params.set("desde", desde);
-  if (hasta) params.set("hasta", hasta);
-  const qs = params.toString();
-  return `${baseURL}/export/csv${qs ? `?${qs}` : ""}`;
-};
+export function buildExportCsvUrl({ tipo = "lecturas", nodoId, limite = 1000 } = {}) {
+  let apiBase =
+    import.meta.env.VITE_API_BASE_URL ||
+    "https://internet-of-thingsfinal-project-production-80a2.up.railway.app";
+
+  // Asegurar que comience con https://
+  if (!apiBase.startsWith("http://") && !apiBase.startsWith("https://")) {
+    apiBase = `https://${apiBase}`;
+  }
+
+  // Eliminar barra al final si existe
+  apiBase = apiBase.replace(/\/+$/, "");
+
+  const params = new URLSearchParams({ tipo, limit: String(limite) });
+  if (nodoId) params.append("nodo_id", nodoId);
+
+  return `${apiBase}/export/csv?${params.toString()}`;
+}
 
 // --- Health Check ---
 export const getHealth = () => api.get("/").then((r) => r.data);
