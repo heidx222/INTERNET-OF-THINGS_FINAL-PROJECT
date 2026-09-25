@@ -13,7 +13,8 @@ import { NODO_POR_DEFECTO } from "../utils/constants.js";
  * publicando comandos MQTT inversos (`chancay/actuadores/comando/<nodo_id>`)
  * hacia los actuadores simulados de la cuenca (Sirena / Compuerta).
  *
- * Cada acción se valida server-side (Tab 04 del backend Node-RED) y
+ * Cada acción se valida server-side (endpoint POST /telecontrol/comando del
+ * microservicio FastAPI de la Capa 3) y
  * queda registrada en la bitácora de auditoría (`telecontrol_historial`).
  */
 

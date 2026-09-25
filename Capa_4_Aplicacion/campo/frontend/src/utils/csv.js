@@ -3,7 +3,7 @@
  * cuando se desea exportar exactamente el subconjunto de datos
  * actualmente visible en pantalla (ej. resultado filtrado de la tabla
  * de Estadísticas Históricas), en lugar del export server-side
- * completo servido por `GET /api/export/csv` (ver services/api.js).
+ * completo servido por `GET /export/csv` (ver services/api.js).
  */
 export function descargarCsv(filas, columnas, nombreArchivo) {
   const escape = (v) => {

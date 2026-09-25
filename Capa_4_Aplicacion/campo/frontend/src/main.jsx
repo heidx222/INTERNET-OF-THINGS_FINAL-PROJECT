@@ -12,7 +12,7 @@ import "./index.css";
  * las vistas (Dashboard, Notificaciones, Estadísticas, GIS) necesitan
  * acceso reactivo al mismo estado global de telemetría/alertas en vivo
  * (alimentado por los WebSockets `/ws/telemetria` y `/ws/alertas`
- * expuestos por el backend Node-RED).
+ * expuestos por el microservicio FastAPI de la Capa 3).
  */
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

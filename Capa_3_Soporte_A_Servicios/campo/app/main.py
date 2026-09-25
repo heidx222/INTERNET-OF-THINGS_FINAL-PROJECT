@@ -134,8 +134,15 @@ manager_telemetria = ConnectionManager()
 # ============================================================
 # PERSISTENCIA (Fase KNOWLEDGE del lazo MAPE-K)
 # ============================================================
-async def guardar_en_bd(data: SensorData, es_anomalia: bool, estado_mapek: int):
-    """Guarda la lectura en PostgreSQL (Fase Knowledge del lazo MAPE-K)."""
+async def guardar_en_bd(data: SensorData, alerta: bool, es_anomalia: bool, estado_mapek: int):
+    """
+    Guarda la lectura en PostgreSQL (Fase Knowledge del lazo MAPE-K).
+
+    `alerta`      -> flag operativo de la cuenca (reglas determinísticas > 0).
+    `es_anomalia` -> veredicto del Isolation Forest (IA multivariable).
+    Se persisten en columnas DISTINTAS: mezclarlos falseaba la analítica de
+    anomalías de la IA en el histórico consultado por la Capa 4.
+    """
     pool = app_state.get("db_pool")
     if not pool:
         print("[DB-ERROR] Imposible guardar: Pool de conexiones a la BD no disponible.")
@@ -160,7 +167,7 @@ async def guardar_en_bd(data: SensorData, es_anomalia: bool, estado_mapek: int):
                 data.tds_ppm,
                 data.ph,
                 data.turbidez_ntu,
-                bool(es_anomalia),
+                bool(alerta),
                 int(estado_mapek),
                 bool(es_anomalia),
             )
@@ -219,7 +226,8 @@ async def procesar_lectura(sensor_data: SensorData, client_ctx=None):
     requiere_alerta = bool(requiere_alerta)
 
     # 3. KNOWLEDGE — persistencia en PostgreSQL
-    await guardar_en_bd(sensor_data, requiere_alerta, estado_mapek)
+    #    `alerta` (reglas) y `es_anomalia` (IA) son columnas INDEPENDIENTES.
+    await guardar_en_bd(sensor_data, requiere_alerta, es_anomalia_ia, estado_mapek)
 
     # 4. Payload enriquecido para difusión (Capa 4)
     payload = sensor_data.model_dump()
@@ -234,20 +242,35 @@ async def procesar_lectura(sensor_data: SensorData, client_ctx=None):
     await manager_telemetria.broadcast(payload)
 
     # 6. PLAN & EXECUTE — comando hacia actuadores de Capa 1 + alerta a Capa 4
-    if requiere_alerta:
-        print(f"[ALERTA MAPE-K] Anomalía detectada en {sensor_data.node_id} | Estado: {estado_mapek}")
+    #
+    # CORRECCIÓN DEL LAZO INVERSO (Capa 3 -> Capa 1):
+    # el bloque anterior evaluaba `if estado_mapek in (1,2,3) ... else DESACTIVAR`
+    # DENTRO de `if requiere_alerta`, y `requiere_alerta == (estado_mapek > 0)`.
+    # Por tanto la rama `else` (DESACTIVAR) era CÓDIGO MUERTO y la sirena del
+    # ESP32 nunca se despejaba automáticamente al volver la cuenca a estado
+    # NORMAL. Ahora la transición se evalúa SIEMPRE y solo se emite el comando
+    # cuando el estado cambia (evita inundar el broker con órdenes idénticas).
+    estado_anterior = app_state.get(f"estado_mapek_{sensor_data.node_id}")
 
-        # Sirena/comando se activa con estados 1/2/3; se despeja con estado 0
-        if estado_mapek in (1, 2, 3):
-            comando_txt = "ACTIVAR"
-        else:
-            comando_txt = "DESACTIVAR"
+    if estado_mapek != estado_anterior:
+        app_state[f"estado_mapek_{sensor_data.node_id}"] = estado_mapek
 
+        comando_txt = "ACTIVAR" if estado_mapek in (1, 2, 3) else "DESACTIVAR"
+        motivo = (
+            f"Alerta nivel {estado_mapek} detectada por MAPE-K / IA"
+            if comando_txt == "ACTIVAR"
+            else "Cuenca en estado NORMAL: se despeja la alerta del nodo"
+        )
         alerta = AlertaOut(
             comando=comando_txt,
-            motivo=f"Alerta nivel {estado_mapek} detectada por MAPE-K / IA",
+            motivo=motivo,
             severidad="CRITICA" if estado_mapek == 3 else ("ALTA" if estado_mapek == 2 else "MEDIA"),
         )
+
+        if comando_txt == "ACTIVAR":
+            print(f"[ALERTA MAPE-K] Anomalía detectada en {sensor_data.node_id} | Estado: {estado_mapek}")
+        else:
+            print(f"[ALERTA MAPE-K] {sensor_data.node_id} normalizado -> se publica DESACTIVAR (estaba en {estado_anterior}).")
 
         # A) Publicar por MQTT hacia los actuadores de campo (Capa 1)
         if client_ctx is not None:

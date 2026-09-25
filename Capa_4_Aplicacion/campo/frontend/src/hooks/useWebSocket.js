@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
  * (backoff fijo de 3s) y parseo seguro de JSON.
  *
  * Usado para conectar contra los dos canales expuestos por el
- * backend Node-RED (Capa 4, Tab 01 y Tab 02):
+ * microservicio FastAPI (Capa 3 - Soporte a Servicios):
  *   - /ws/telemetria → lecturas fusionadas con diagnóstico de IA
  *   - /ws/alertas    → alertas clasificadas por severidad
  *

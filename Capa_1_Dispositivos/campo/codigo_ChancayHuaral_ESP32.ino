@@ -37,11 +37,13 @@
 // ============================================================
 // CONFIGURACIÓN DE RED Y BROKER (Sincronizado con Capa 2 y 3)
 // ============================================================
-#define WIFI_SSID       "LAB 06 NP"
-#define WIFI_PASS       "AL1BA4TE&T3"
+// [EDITA] Red WiFi del despliegue de campo.
+#define WIFI_SSID       "TU_RED_WIFI"
+#define WIFI_PASS       "TU_PASSWORD_WIFI"
 
-// Broker Mosquitto desplegado en Railway (Capa 2)
-#define MQTT_SERVER     "iriguchi.proxy.rlwy.net"
+// [EDITA] Broker Mosquitto desplegado en Railway (Capa 2).
+// Usa el host/puerto del TCP Proxy público del servicio broker-mqtt.
+#define MQTT_SERVER     "TU_HOST.proxy.rlwy.net"
 #define MQTT_PORT       28182
 // Credencial del nodo definida en la ACL de la Capa 2 (postgres/init.sql).
 // Contraseña en claro de desarrollo: nodoChancay01.
@@ -53,6 +55,12 @@
 #define MQTT_TOPIC_PUB  "chancay/cuenca/tiempo_real/nodo_chancay_01"
 #define MQTT_TOPIC_SUB_ALERTA  "chancay/actuadores/alerta/nodo_chancay_01"
 #define MQTT_TOPIC_SUB_COMANDO "chancay/actuadores/comando/nodo_chancay_01"
+
+// El payload JSON de telemetría (~216 B) + tópico (~42 B) supera el buffer
+// por defecto de PubSubClient (MQTT_MAX_PACKET_SIZE = 256 B), con lo que
+// client.publish() fallaría y se rompería el enlace Capa 1 -> Capa 2.
+// Se amplía explícitamente el buffer del cliente en setup().
+#define MQTT_BUFFER_SIZE 512
 
 #define WDT_TIMEOUT_SEG 30 // Watchdog timer de seguridad
 
@@ -225,6 +233,9 @@ void setup() {
   configTime(NTP_GMT_OFFSET_S, NTP_DST_OFFSET_S, "pool.ntp.org", "time.nist.gov");
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callbackMQTT);
+  // Amplía el buffer RX/TX de PubSubClient para alojar el JSON de telemetría
+  // completo (el default de 256 B se queda corto: ~265 B de paquete MQTT).
+  client.setBufferSize(MQTT_BUFFER_SIZE);
 
   // Beep de confirmación
   digitalWrite(PIN_BUZZER, HIGH); delay(120); digitalWrite(PIN_BUZZER, LOW);

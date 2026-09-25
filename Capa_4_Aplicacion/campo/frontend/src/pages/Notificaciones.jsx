@@ -19,7 +19,7 @@ const FILTROS = [
  * Combina un panel de eventos instantáneos (los más recientes, con
  * indicador visual pulsante para no-atendidos) con el historial
  * cronológico completo de todas las anomalías detectadas por la IA
- * (fuente: `GET /api/alertas`, actualizado en vivo por `WS /ws/alertas`).
+ * (fuente: `GET /telemetria/historico`, actualizado en vivo por `WS /ws/alertas`).
  */
 
 /**
@@ -75,7 +75,7 @@ export default function Notificaciones() {
 
       <Card
         title="Historial Cronológico de Anomalías"
-        subtitle="Alimentado en tiempo real por el motor Isolation Forest (motor_ia_chancay)"
+        subtitle="Alimentado en tiempo real por el motor Isolation Forest (Capa 3)"
         actions={
           <a
             href={buildExportCsvUrl({ tipo: "alertas" })}
