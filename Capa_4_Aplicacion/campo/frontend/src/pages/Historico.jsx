@@ -1,28 +1,13 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { format, subDays } from "date-fns";
-import { Download, Search, TrendingUp, TrendingDown } from "lucide-react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
+import { format } from "date-fns";
+import { Download, Search, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import Card from "../components/ui/Card.jsx";
 import TimeSeriesChart from "../components/ui/TimeSeriesChart.jsx";
 import NodeSelector from "../components/dashboard/NodeSelector.jsx";
-import { getTelemetriaHistorica } from "../services/api.js";
-import { buildExportCsvUrl } from "../services/api.js";
+import { getTelemetriaHistorica, buildExportCsvUrl } from "../services/api.js";
 import { descargarCsv } from "../utils/csv.js";
 import { NODO_POR_DEFECTO } from "../utils/constants.js";
 
-const hoyIso = () => format(new Date(), "yyyy-MM-dd'T'HH:mm");
-const hace7diasIso = () => format(subDays(new Date(), 7), "yyyy-MM-dd'T'HH:mm");
-
-/**
- * Sección de Estadísticas Históricas.
- *
- * Permite al analista seleccionar un rango de fechas y un nodo,
- * consultar el histórico persistido en PostgreSQL (a través del
- * proxy `GET /telemetria/historico` del microservicio FastAPI (Capa 3)),
- * visualizar tendencias y calcular el % de salud hídrica del periodo.
- */
-/**
- * Función auxiliar para formatear fechas de manera 100% segura.
- */
 function formatearFechaSegura(rawFecha) {
   if (!rawFecha) return "—";
   const d = new Date(rawFecha);
@@ -30,9 +15,6 @@ function formatearFechaSegura(rawFecha) {
   return format(d, "dd/MM/yyyy HH:mm:ss");
 }
 
-/**
- * Función auxiliar para formatear números de manera segura.
- */
 function formatearNumero(valor, decimales = 2) {
   const num = Number(valor);
   if (isNaN(num) || valor === null || valor === undefined) return "0.00";
@@ -41,8 +23,8 @@ function formatearNumero(valor, decimales = 2) {
 
 export default function Historico() {
   const [nodoId, setNodoId] = useState(NODO_POR_DEFECTO);
-  const [desde, setDesde] = useState(hace7diasIso());
-  const [hasta, setHasta] = useState(hoyIso());
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [consultado, setConsultado] = useState(false);
@@ -50,7 +32,6 @@ export default function Historico() {
   const consultar = useCallback(async () => {
     setCargando(true);
     try {
-      // Si el usuario especificó fechas, las convertimos a ISO; si no, enviamos undefined
       const params = {
         nodoId: nodoId || undefined,
         limit: 500,
@@ -65,6 +46,7 @@ export default function Historico() {
 
       const resp = await getTelemetriaHistorica(params);
       const lista = Array.isArray(resp) ? resp : [];
+
       const normalizado = lista
         .map((r) => {
           const rawTime = r.created_at || r.timestamp_registro || r.timestamp_ms || r.ts;
@@ -95,7 +77,7 @@ export default function Historico() {
     }
   }, [desde, hasta, nodoId]);
 
-  // Carga automática inicial al entrar a la vista /historico
+  // Carga inicial automática de datos desde PostgreSQL
   useEffect(() => {
     consultar();
   }, [nodoId]);
@@ -187,6 +169,14 @@ export default function Historico() {
             >
               <Download className="w-3.5 h-3.5" /> CSV (vista actual)
             </button>
+            <a
+              href={buildExportCsvUrl({ tipo: "lecturas", nodoId })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-slate_tech-700 hover:bg-slate_tech-800 rounded-lg px-3 py-2 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> CSV (buffer en vivo)
+            </a>
           </div>
         </div>
       </Card>
