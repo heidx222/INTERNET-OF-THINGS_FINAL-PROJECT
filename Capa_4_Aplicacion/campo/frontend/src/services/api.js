@@ -2,20 +2,8 @@ import axios from "axios";
 import { NODOS_CUENCA } from "../utils/constants.js";
 
 /**
- * Cliente HTTP centralizado de la Capa 4 (Aplicación) apuntando al
- * microservicio FastAPI de la Capa 3 (Soporte a Servicios).
- *
- * Contrato real expuesto por la Capa 3 (app/main.py):
- *   GET  /                         → health
- *   GET  /nodos/estado             → presencia ONLINE/OFFLINE por nodo
- *   GET  /telemetria/reciente      → últimas N lecturas
- *   GET  /telemetria/historico     → histórico filtrado
- *   GET  /telemetria/salud         → índice agregado de salud hídrica
- *   POST /diagnostico              → veredicto Isolation Forest
- *   POST /telecontrol/comando      → comando manual del operador → Capa 1
- *   GET  /telecontrol/historial    → bitácora de auditoría
- *   GET  /export/csv               → exportación CSV server-side
- *   WS   /ws/telemetria, /ws/alertas
+ * Normaliza cualquier variable de URL de API eliminando barras
+ * o protocolos duplicados para evitar rutas relativas en Axios.
  */
 function obtenerBaseUrl() {
   let envUrl = import.meta.env.VITE_API_BASE_URL || "internet-of-thingsfinal-project-production-80a2.up.railway.app";
@@ -26,7 +14,9 @@ function obtenerBaseUrl() {
   // Devuelve la URL lista con HTTPS
   return `https://${domainOnly}`;
 }
+
 const baseURL = obtenerBaseUrl();
+
 export const api = axios.create({
   baseURL,
   timeout: 10000,
@@ -37,12 +27,6 @@ export const api = axios.create({
 export const getTelemetriaReciente = (limit = 30) =>
   api.get("/telemetria/reciente", { params: { limit } }).then((r) => r.data || []);
 
-/**
- * Devuelve la última lectura de un nodo concreto. La Capa 3 no expone un
- * endpoint "por nodo" para /reciente, así que pedimos un bloque reciente y
- * filtramos en el cliente (los nodos publican cada 3 s, un bloque de 60
- * cubre con holgura a todos los nodos activos).
- */
 export const getTelemetriaActual = (nodoId) =>
   api
     .get("/telemetria/reciente", { params: { limit: 60 } })
@@ -54,9 +38,10 @@ export const getTelemetriaActual = (nodoId) =>
 
 export const getSerieTemporal = (nodoId, limit = 200) =>
   api
-    .get("/telemetria/historico", { params: { nodo_id: nodoId, limit } })
+    .get("/telemetria/historico", { params: { node_id: nodoId, limit } })
     .then((r) => r.data || []);
 
+// CORREGIDO: Ahora usa 'api.get' de Axios en lugar de 'fetchApi'
 export const getTelemetriaHistorica = ({ desde, hasta, nodoId, limit = 500 } = {}) => {
   const params = { limit };
   if (nodoId) params.node_id = nodoId;
@@ -74,25 +59,20 @@ export const postDiagnostico = (data) =>
 export const getSaludHidrica = () =>
   api.get("/telemetria/salud").then((r) => r.data || null);
 
-// --- Presencia de nodos (Capa 1 online/offline) ---
+// --- Presencia de nodos ---
 export const getEstadoNodos = () =>
   api.get("/nodos/estado").then((r) => r.data || {});
 
-// --- Alertas: se derivan de las lecturas con `alerta === true` ---
+// --- Alertas ---
 export const getAlertas = ({ nodoId, limit = 200 } = {}) =>
   api
-    .get("/telemetria/historico", { params: { nodo_id: nodoId, limit } })
+    .get("/telemetria/historico", { params: { node_id: nodoId, limit } })
     .then((r) =>
       (r.data || [])
         .filter((d) => d.alerta === true || d.es_anomalia === true)
         .map(normalizarAlerta)
     );
 
-/**
- * Traduce una fila de telemetría-alerta de la Capa 3 al formato de alerta que
- * consume la UI (mensaje, severidad, timestamp), derivando la severidad del
- * estado MAPE-K persistido.
- */
 export function normalizarAlerta(fila) {
   const estado = Number(fila.estado_mapek ?? 0);
   const severidad = { 0: "INFO", 1: "ADVERTENCIA", 2: "CRITICO", 3: "CRITICO" }[estado] || "INFO";
@@ -114,10 +94,10 @@ export function normalizarAlerta(fila) {
   };
 }
 
-// --- Nodos GIS: coordenadas desde las constantes del dominio (fuente única) ---
+// --- Nodos GIS ---
 export const getNodosGIS = () => Promise.resolve(NODOS_CUENCA);
 
-// --- Telecontrol (Panel de Anulación Manual) ---
+// --- Telecontrol ---
 export const enviarComandoTelecontrol = ({ nodoId, actuador, accion, operador }) =>
   api
     .post("/telecontrol/comando", {
@@ -132,7 +112,7 @@ export const enviarComandoTelecontrol = ({ nodoId, actuador, accion, operador })
 export const getHistorialTelecontrol = (limit = 50, nodoId) =>
   api
     .get("/telecontrol/historial", {
-      params: { limit, ...(nodoId ? { nodo_id: nodoId } : {}) },
+      params: { limit, ...(nodoId ? { node_id: nodoId } : {}) },
     })
     .then((r) => r.data || []);
 
