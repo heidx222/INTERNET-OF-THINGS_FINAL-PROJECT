@@ -223,6 +223,9 @@ void setup() {
   Serial.println(" Cuenca Chancay-Huaral");
   Serial.println("========================================\n");
 
+  // --- CAMBIO 1: Comentar el bloque de esp_task_wdt ---
+  // (En ESP32 Arduino v3+ ya viene activo y re-inicializarlo provoca el pánico)
+  /*
   esp_task_wdt_config_t wdt_config = {
       .timeout_ms = WDT_TIMEOUT_SEG * 1000,
       .idle_core_mask = (1 << 0) | (1 << 1),
@@ -230,6 +233,7 @@ void setup() {
   };
   esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
+  */
 
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
@@ -252,8 +256,6 @@ void setup() {
   configTime(NTP_GMT_OFFSET_S, NTP_DST_OFFSET_S, "pool.ntp.org", "time.nist.gov");
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callbackMQTT);
-  // Amplía el buffer RX/TX de PubSubClient para alojar el JSON de telemetría
-  // completo (el default de 256 B se queda corto: ~265 B de paquete MQTT).
   client.setBufferSize(MQTT_BUFFER_SIZE);
 
   // Beep de confirmación
@@ -265,7 +267,7 @@ void setup() {
 // LOOP PRINCIPAL (MAPE-K Edge)
 // ============================================================
 void loop() {
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset();
 
   if (!client.connected()) {
     reconnect_autonomo();
@@ -615,13 +617,58 @@ void imprimirSerial() {
   Serial.println("========================================");
   Serial.print("NODO ID          : "); Serial.println(NODO_ID);
   Serial.print("ESTADO           : "); Serial.println(mensajeAlerta);
-  Serial.print("Nivel de Agua    : "); Serial.println(distanciaNivel > 0 ? String(distanciaNivel / 100.0, 2) + " m" : "1.25 m");
-  Serial.print("pH               : "); Serial.println(phValue != -999.0 ? String(phValue, 2) : "7.40");
-  Serial.print("TDS              : "); Serial.print(tdsValue, 0); Serial.println(" ppm");
-  Serial.print("Turbidez         : "); Serial.println(turbidezValue != -999.0 ? String(turbidezValue, 1) : "12.5 NTU");
-  Serial.print("Temp. Agua       : "); Serial.println(temperaturaAgua != -999.0 ? String(temperaturaAgua, 1) + " °C" : "19.2 °C");
-  Serial.print("Temp. Ambiente   : "); Serial.println(temperaturaAmbiente != -999.0 ? String(temperaturaAmbiente, 1) + " °C" : "21.5 °C");
-  Serial.print("Humedad          : "); Serial.println(humedad != -999.0 ? String(humedad, 0) + " %" : "-- %");
+  
+  // Nivel de Agua
+  Serial.print("Nivel de Agua    : "); 
+  if (distanciaNivel > 0) {
+    Serial.print(distanciaNivel / 100.0, 2); Serial.println(" m");
+  } else {
+    Serial.println("[SIN SEÑAL / FUERA DE RANGO]");
+  }
+
+  // pH
+  Serial.print("pH               : "); 
+  if (phValue != -999.0) {
+    Serial.println(phValue, 2);
+  } else {
+    Serial.println("[SENSOR DESCONECTADO]");
+  }
+
+  // TDS
+  Serial.print("TDS              : "); 
+  Serial.print(tdsValue, 0); Serial.println(" ppm");
+
+  // Turbidez
+  Serial.print("Turbidez         : "); 
+  if (turbidezValue != -999.0) {
+    Serial.print(turbidezValue, 1); Serial.println(" NTU");
+  } else {
+    Serial.println("[SENSOR DESCONECTADO]");
+  }
+
+  // Temp Agua
+  Serial.print("Temp. Agua       : "); 
+  if (temperaturaAgua != -999.0) {
+    Serial.print(temperaturaAgua, 1); Serial.println(" °C");
+  } else {
+    Serial.println("[DS18B20 DESCONECTADO]");
+  }
+
+  // Temp Ambiente y Humedad
+  Serial.print("Temp. Ambiente   : "); 
+  if (temperaturaAmbiente != -999.0) {
+    Serial.print(temperaturaAmbiente, 1); Serial.println(" °C");
+  } else {
+    Serial.println("[DHT11 ERROR]");
+  }
+
+  Serial.print("Humedad          : "); 
+  if (humedad != -999.0) {
+    Serial.print(humedad, 0); Serial.println(" %");
+  } else {
+    Serial.println("[DHT11 ERROR]");
+  }
+
   Serial.print("MQTT             : "); Serial.println(client.connected() ? "CONECTADO" : "DESCONECTADO");
   Serial.println("========================================\n");
 }
